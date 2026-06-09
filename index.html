@@ -1,0 +1,5458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calvary Cemetery Veterans Memorial — Holyoke, MA</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Georgia,serif; background:#1a1a1a; color:#f0e8d8; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+#header {
+  background:#0d0d0d; border-bottom:2px solid #6b3a1f;
+  padding:10px 18px; display:flex; align-items:center;
+  justify-content:space-between; flex-shrink:0; z-index:1000;
+}
+#header h1 { font-size:1.05rem; font-weight:normal; letter-spacing:0.08em; text-transform:uppercase; }
+#header .sub { font-size:0.72rem; color:#888; margin-top:2px; }
+#vet-count { font-size:0.85rem; color:#CD853F; letter-spacing:0.04em; }
+
+#main { position:relative; flex:1; overflow:hidden; }
+#map { position:absolute; inset:0; z-index:1; }
+
+/* ERA LEGEND — bottom left */
+#legend {
+  position:absolute; bottom:36px; left:12px;
+  background:rgba(8,8,8,0.9); border:1px solid #3a3a3a;
+  border-radius:5px; padding:10px 13px; z-index:800; min-width:155px;
+}
+#legend h4 { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.12em; color:#888; margin-bottom:8px; }
+.leg-row { display:flex; align-items:center; gap:7px; margin-bottom:5px; cursor:pointer; transition:opacity 0.15s; }
+.leg-row:hover { opacity:0.75; }
+.leg-sym { width:16px; text-align:center; font-size:0.82rem; }
+.leg-label { font-size:0.72rem; color:#ccc; flex:1; }
+.leg-count { font-size:0.68rem; color:#ccc; }
+.leg-row.dimmed { opacity:0.28; }
+
+/* SIDEBAR — right */
+#sidebar {
+  position:absolute; top:0; right:0; bottom:0; width:265px;
+  background:rgba(10,10,10,0.93); border-left:1px solid #2a2a2a;
+  display:flex; flex-direction:column; z-index:800; overflow:hidden;
+}
+#sidebar-top { padding:10px 11px 8px; border-bottom:1px solid #222; background:#0a0a0a; }
+#search {
+  width:100%; background:#1a1a1a; border:1px solid #3a3a3a; color:#f0e8d8;
+  padding:6px 9px; font-family:Georgia,serif; font-size:0.8rem;
+  border-radius:3px; margin-bottom:7px; outline:none;
+}
+#search:focus { border-color:#CD853F; }
+#search::placeholder { color:#555; }
+#era-filters { display:flex; flex-wrap:wrap; gap:3px; }
+.era-btn {
+  padding:3px 7px; border-radius:3px; border:2px solid transparent;
+  font-size:0.63rem; cursor:pointer; font-family:Georgia,serif;
+  color:white; text-shadow:0 1px 2px rgba(0,0,0,0.6);
+  transition:opacity 0.2s, border-color 0.15s;
+  opacity:1;
+}
+.era-btn.off { opacity:0.28; border-color:transparent; }
+.era-btn.on { border-color:rgba(255,255,255,0.6); opacity:1; }
+
+#vet-list { overflow-y:auto; flex:1; padding:3px 0; }
+#vet-list::-webkit-scrollbar { width:4px; }
+#vet-list::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
+.vet-item {
+  padding:6px 11px; cursor:pointer; border-bottom:1px solid #181818;
+  display:flex; align-items:center; gap:7px; transition:background 0.1s;
+}
+.vet-item:hover { background:#1c1c1c; }
+.vet-item.active { background:#1e120a; border-left:3px solid #CD853F; padding-left:8px; }
+.v-sym { font-size:0.8rem; width:15px; text-align:center; flex-shrink:0; }
+.v-name { font-size:0.78rem; color:#d4c9b8; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.v-era { font-size:0.63rem; color:#777; }
+#no-results { padding:18px; color:#555; font-size:0.8rem; text-align:center; display:none; }
+
+/* POPUP — light overlay */
+#popup {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.25); z-index:3000;
+  pointer-events:none;
+}
+#popup.show { display:block; pointer-events:auto; }
+#pbox {
+  position:absolute;
+  top:50%; right:275px;
+  transform:translateY(-50%);
+  background:#141414; border:1px solid #444; border-radius:6px;
+  width:310px; max-height:78vh; overflow-y:scroll; scroll-behavior:smooth;
+  padding:20px; box-shadow:0 8px 40px rgba(0,0,0,0.7);
+  pointer-events:auto;
+}
+#pclose {
+  position:absolute; top:9px; right:12px;
+  background:none; border:none; color:#888; font-size:1.5rem; cursor:pointer;
+}
+#pclose:hover { color:#fff; }
+#pphoto { width:100%; max-height:200px; object-fit:cover; border-radius:4px; margin-bottom:12px; display:none; }
+#pname { font-size:1.05rem; color:#f0e8d8; margin-bottom:3px; }
+#pservice { font-size:0.78rem; color:#CD853F; margin-bottom:9px; letter-spacing:0.04em; }
+#pstory { font-size:0.78rem; color:#aaa; line-height:1.65; }
+#pflags { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+.fbadge { padding:3px 8px; border-radius:3px; font-size:0.68rem; font-weight:bold; }
+
+/* Kill default Leaflet popup chrome on coord label */
+.coord-label .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+.coord-label .leaflet-popup-tip-container {
+  display: none !important;
+}
+.coord-label .leaflet-popup-content {
+  margin: 0 !important;
+}
+.coord-label {
+  z-index: 1200 !important;
+}
+
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.8), 0 1px 5px rgba(0,0,0,0.8); transform:scale(1); }
+  50%  { box-shadow: 0 0 0 10px rgba(255,255,255,0), 0 1px 5px rgba(0,0,0,0.8); transform:scale(1.35); }
+  100% { box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 1px 5px rgba(0,0,0,0.8); transform:scale(1); }
+}
+.marker-pulse > div {
+  animation: pulse 1.2s ease-in-out infinite !important;
+  border-color: white !important;
+  border-width: 3px !important;
+  z-index: 9999 !important;
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <h1>&#10013; Calvary Cemetery Veterans Memorial</h1>
+    <div class="sub">Holyoke, Massachusetts &bull; Est. 1882</div>
+  </div>
+  <div id="vet-count"></div>
+</div>
+
+<div id="main">
+  <div id="map"></div>
+
+  <div id="legend">
+    <h4>Era</h4>
+    <div id="leg-rows"></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-top">
+      <input type="text" id="search" placeholder="Search veterans... (Enter to jump)">
+      <div id="era-filters"></div>
+    </div>
+    <div id="vet-list"></div>
+    <div id="no-results">No veterans found</div>
+  </div>
+</div>
+
+<div id="popup">
+  <div id="pbox">
+    <button id="pclose" onclick="closePopup()">&#215;</button>
+    <img id="pphoto" src="" alt="">
+    <div id="pname"></div>
+    <div id="pservice"></div>
+    <div id="pcoords" style="font-size:0.68rem;color:#666;margin-bottom:9px;font-family:monospace;"></div>
+    <div id="pstory"></div>
+    <div id="pflags"></div>
+  </div>
+</div>
+
+<script>
+const veterans = [
+  {
+    "id": "ackronis__j_navy_ww_ii",
+    "name": "J. Ackronis",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884694,
+    "lng": -72.6288833,
+    "story": "J. Ackronis served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/ackronis__j_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "allen__w_ct_inf_span_am_war",
+    "name": "W. Allen",
+    "branch": "Connecticut Infantry",
+    "branchLabel": "CT Infantry \u00b7 Span-Am War",
+    "era": "Spanish-American War",
+    "lat": 42.1879167,
+    "lng": -72.627875,
+    "story": "W. Allen served in the Connecticut Infantry during the Spanish-American War (1898) \u2014 one of the oldest era veterans at Calvary Cemetery. The Spanish-American War lasted only four months but marked America's emergence as a world power. Allen may have fought in Cuba or the Philippines alongside Theodore Roosevelt's Rough Riders. His stone is a rare link to the 19th century military in a cemetery that spans every American conflict.",
+    "color": "#8B008B",
+    "icon": "\u2605",
+    "photo": "photos/allen__w_ct_inf_span_am_war.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "baker__j_army_ww_i",
+    "name": "J. Baker",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1894417,
+    "lng": -72.6286472,
+    "story": "J. Baker served in the U.S. Army during World War I. Holyoke answered the call when America entered the Great War in 1917, and Baker was among those who served. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/baker__j_army_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "baker__j_f_army_ww_ii",
+    "name": "J.F. Baker",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1877472,
+    "lng": -72.6271139,
+    "story": "J.F. Baker served in the U.S. Army during World War II. The Baker family sent members to serve in both World War I and World War II. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/baker__j_f_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "barnett__c_army_ww_ii",
+    "name": "C. Barnett",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187325,
+    "lng": -72.627608,
+    "story": "C. Barnett served in the U.S. Army during World War II. The Barnett family contributed to both World War I and WWII \u2014 J. Barnett in the Navy and C. Barnett in the Army. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/barnett__c_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "barnett__j_navy_ww_i",
+    "name": "J. Barnett",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187297,
+    "lng": -72.627678,
+    "story": "J. Barnett served in the United States Navy during World War I. The Barnett family sent members to serve in both WWI and WWII \u2014 J. Barnett in the Navy and C. Barnett in the Army. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/barnett__j_navy_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "barrett__e_army_ww_ii",
+    "name": "E. Barrett",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878,
+    "lng": -72.6289667,
+    "story": "E. Barrett served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/barrett__e_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bartley__j_mass_usnrf",
+    "name": "J. Bartley",
+    "branch": "Massachusetts USNRF",
+    "branchLabel": "MA USNRF \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.186967,
+    "lng": -72.627633,
+    "story": "J. Bartley served in the Massachusetts United States Naval Reserve Force during World War I \u2014 a rare unit designation that combined state affiliation with federal naval reserve service. USNRF units mobilized rapidly to protect Atlantic shipping lanes from the German U-boat campaign.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/bartley__j_mass_usnrf.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "batchelor__h_army_ww_ii",
+    "name": "H. Batchelor",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188897,
+    "lng": -72.629028,
+    "story": "H. Batchelor served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/batchelor__h_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "beaulieu",
+    "name": "W.F. Beaulieu",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF",
+    "era": "Unknown Era",
+    "lat": 42.18801111111111,
+    "lng": -72.62925,
+    "story": "W.F. Beaulieu served in the United States Air Force. Further details about his service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/beaulieu.jpg"
+  },
+  {
+    "id": "beaulieu__w_f_air_force",
+    "name": "W.F. Beaulieu",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF",
+    "era": "Unknown Era",
+    "lat": 42.188011,
+    "lng": -72.62925,
+    "story": "W.F. Beaulieu served in the United States Air Force. Era of service is being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/beaulieu__w_f_air_force.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "begley__d_ww_i_kia",
+    "name": "D. Begley",
+    "branch": "U.S. Military",
+    "branchLabel": "KIA \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187825,
+    "lng": -72.627372,
+    "flags": [
+      "KIA"
+    ],
+    "story": "D. Begley was killed in action during World War I. One of Calvary Cemetery's most solemn markers, Begley's stone honors a Holyoke soldier who gave everything on the Western Front. His name endures here while his sacrifice belongs to the roll call of the Great War's fallen.",
+    "color": "#8b0000",
+    "icon": "\u271d",
+    "photo": "photos/begley__d__ww_i_kia.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "belisle__r_usaaf_ww_ii",
+    "name": "R. Belisle",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "USAAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187625,
+    "lng": -72.627936,
+    "story": "R. Belisle served in the United States Army Air Forces during World War II. The USAAF grew into the largest air force in history, flying strategic bombing missions over Europe and the Pacific. Further details about their service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/belisle__r_usaaf_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bell__e_army_ww_ii",
+    "name": "E. Bell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1877028,
+    "lng": -72.6272278,
+    "story": "E. Bell",
+    "photo": "photos/bell__e_army_ww_ii.jpg"
+  },
+  {
+    "id": "bell__l_e_army_ww_ii",
+    "name": "L. & E. Bell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII \u00b7 Shared Stone",
+    "era": "World War II",
+    "lat": 42.187706,
+    "lng": -72.627228,
+    "flags": [
+      "Shared Headstone"
+    ],
+    "story": "L. Bell and E. Bell share a headstone at Calvary Cemetery \u2014 two brothers who both served in the U.S. Army during World War II. The Bell family sent multiple members to serve, a pattern seen in many Holyoke families during the war.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/bell__l_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "blaine__g_army_ww_i",
+    "name": "G. Blaine",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187431,
+    "lng": -72.627686,
+    "story": "G. Blaine served in the U.S. Army during World War I. Holyoke answered the call when America entered the Great War in 1917, and Blaine was among those who served. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/blaine__g_army_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "boisjolie__e_navy_korea",
+    "name": "E. Boisjolie",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.188208,
+    "lng": -72.629075,
+    "story": "E. Boisjolie served in the United States Navy during the Korean War (1950-1953). The Navy provided critical gunfire support, carrier air operations, and supply lines throughout the conflict. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/boisjolie__e_navy_korea.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "boles__j_navy_ww_i",
+    "name": "J. Boles",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.189697,
+    "lng": -72.629158,
+    "story": "J. Boles served in the United States Navy during World War I. The Navy's critical mission in WWI was protecting Atlantic shipping lanes from German U-boats \u2014 a battle waged in constant danger. Boles is among Calvary Cemetery's WWI naval veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/boles__j_navy_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "brennan__j_usmc_ww_ii",
+    "name": "J. Brennan",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187139,
+    "lng": -72.627411,
+    "story": "J. Brennan served in the United States Marine Corps during World War II. Marines fought some of the Pacific War's most brutal island campaigns \u2014 from Guadalcanal to Iwo Jima. Further details about their service are being researched.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/brennan__j_usmc_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bresnahan__d_navy_ww_ii",
+    "name": "D. Bresnahan",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187969,
+    "lng": -72.629019,
+    "story": "D. Bresnahan served in the United States Navy during World War II. The Bresnahan family spans three conflicts at Calvary Cemetery \u2014 M. in WWI, D. in the Navy during WWII, and G. in the Army during Korea.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/bresnahan__d_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bresnahan__g_army_korea",
+    "name": "G. Bresnahan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.18895,
+    "lng": -72.629036,
+    "story": "G. Bresnahan served in the U.S. Army during the Korean War (1950-1953). The Bresnahan family's service spans three wars \u2014 WWI, WWII, and Korea \u2014 making them one of the most decorated service families at Calvary Cemetery across generations.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/bresnahan__g_army_korea.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bresnaban__m_army_ww_i",
+    "name": "M. Bresnahan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187378,
+    "lng": -72.627242,
+    "story": "M. Bresnahan served in the U.S. Army during World War I. The Bresnahan family sent members to serve across three conflicts \u2014 M. in WWI, D. in the Navy during WWII, and G. in the Army during Korea \u2014 one of Calvary Cemetery's most remarkable multi-generation families.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/bresnaban__m_army_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "broderick__w_field_arty_ww_i",
+    "name": "W. Broderick",
+    "branch": "U.S. Field Artillery",
+    "branchLabel": "Field Artillery \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187089,
+    "lng": -72.628006,
+    "story": "W. Broderick served in the United States Field Artillery during World War I. Artillery units endured some of the most brutal conditions of the Western Front, providing fire support under constant counter-battery threat. The roar of the guns defined the Great War, and Broderick was part of that effort.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/broderick__w_field_arty_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "brown",
+    "name": "H. Brown",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF",
+    "era": "Korean War",
+    "lat": 42.187977777777775,
+    "lng": -72.62969166666666,
+    "story": "H. Brown served in the United States Air Force during the Korean War (1950\u20131953). Often called 'The Forgotten War,' the conflict on the Korean Peninsula cost over 36,000 American lives. Brown was among the airmen who kept UN forces supplied and protected in the skies over a divided peninsula.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/brown.jpg"
+  },
+  {
+    "id": "brown__h_usaf_korea",
+    "name": "H. Brown",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.187978,
+    "lng": -72.629692,
+    "story": "H. Brown served in the United States Air Force during the Korean War (1950-1953). USAF airmen flew combat missions over the Korean Peninsula, providing close air support that was critical to ground operations. Further details about their service are being researched.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/brown__h_usaf_korea.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "browne__e_army_ww_i_ii",
+    "name": "E. Browne",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI & WWII",
+    "era": "World War I",
+    "lat": 42.188086,
+    "lng": -72.628678,
+    "story": "E. Browne served in the U.S. Army during both World War I and World War II \u2014 a rare double-war veteran who answered the call twice. Browne's service from the Western Front to the next generation of conflict represents extraordinary commitment to country across two defining conflicts of the 20th century.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/browne__e_army_ww_i_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bryda__s_navy_ww_ii",
+    "name": "S. Bryda",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188511,
+    "lng": -72.628922,
+    "story": "S. Bryda served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/bryda__s_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "bugbee__h_navy_ww_i",
+    "name": "H. Bugbee",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.186981,
+    "lng": -72.627486,
+    "story": "H. Bugbee served in the United States Navy during World War I. The Navy patrolled the Atlantic against German U-boats, one of the most critical and dangerous missions of the Great War. Bugbee is among Calvary Cemetery's WWI naval veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/bugbee__h_navy_ww_i_.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "burke__j_army_ww_ii",
+    "name": "J. Burke",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188014,
+    "lng": -72.628731,
+    "story": "J. Burke served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/burke__j_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "butler",
+    "name": "D. Butler",
+    "branch": "U.S. Military",
+    "branchLabel": "U.S. Military",
+    "era": "World War II",
+    "lat": 42.188136111111106,
+    "lng": -72.62961666666666,
+    "story": "D. Butler served during World War II (1941\u20131945). Millions of Americans answered the call after Pearl Harbor, and Butler was among Holyoke's own who put on the uniform and went to war. Further details about his branch and service are being researched.",
+    "color": "#5a5a5a",
+    "icon": "\u2605",
+    "photo": "photos/butler.jpg"
+  },
+  {
+    "id": "butler__d_ww_ii",
+    "name": "D. Butler",
+    "branch": "U.S. Military",
+    "branchLabel": "Military \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188136,
+    "lng": -72.629617,
+    "story": "D. Butler served in the U.S. Military during World War II. Branch of service is being researched. The Butler family sent multiple members to serve \u2014 D. Butler in WWII and J. Butler with the Marines. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/butler__d_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "butler__j_usmc_ww_ii",
+    "name": "J. Butler",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187642,
+    "lng": -72.627167,
+    "story": "J. Butler served in the United States Marine Corps during World War II. Marines fought some of the Pacific War's most ferocious battles. The Butler family sent two members to serve in WWII \u2014 J. with the Marines and D. Butler in another branch.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/butler__j_usmc_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cahill__j_mass_inf",
+    "name": "J. Cahill",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 Civil War",
+    "era": "Civil War Era",
+    "lat": 42.188525,
+    "lng": -72.628028,
+    "story": "J. Cahill served in the Massachusetts Infantry, almost certainly during the Civil War (1861-1865). Massachusetts regiments fought throughout the Eastern Theater from Bull Run to Appomattox. Cahill is one of Calvary Cemetery's oldest veteran burials \u2014 a soldier from America's most costly conflict.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/cahill__j_mass_inf.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "carr_",
+    "name": "Carr",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.187008,
+    "lng": -72.627219,
+    "story": "Carr served in the U.S. Military. Further details about their branch, era, and first name are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2605",
+    "photo": "photos/carr_.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "carroll",
+    "name": "R. Carroll",
+    "branch": "Massachusetts Signal Corps",
+    "branchLabel": "MA Signal Corps",
+    "era": "World War II",
+    "lat": 42.189166666666665,
+    "lng": -72.62905833333333,
+    "story": "R. Carroll served in the Massachusetts Signal Corps during World War II. Signal Corps soldiers were the nerve system of the military \u2014 laying wire, operating radios, and keeping communications alive under fire. Their work, largely unseen, was essential to every Allied victory.",
+    "color": "#4a5a8a",
+    "icon": "\u2605",
+    "photo": "photos/carroll.jpg"
+  },
+  {
+    "id": "carroll__r_mass_signal_corps_ww_ii",
+    "name": "R. Carroll",
+    "branch": "Massachusetts Signal Corps",
+    "branchLabel": "MA Signal Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.189167,
+    "lng": -72.629058,
+    "story": "R. Carroll served in the Massachusetts Signal Corps during World War II. Signal Corps troops were the communications backbone of the military \u2014 laying wire, operating radios, and maintaining the command networks that coordinated every Allied operation from D-Day to the Pacific islands.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/carroll__r_mass_signal_corps_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cassidy_",
+    "name": "Cassidy",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.187631,
+    "lng": -72.627303,
+    "story": "Cassidy served in the U.S. Military. Further details about their branch, era, and first name are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2605",
+    "photo": "photos/cassidy.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cavanaugh__d_navy_ww_ii",
+    "name": "D. Cavanaugh",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187589,
+    "lng": -72.627097,
+    "story": "D. Cavanaugh served in the United States Navy during World War II. Two Cavanaugh veterans \u2014 one in the active Navy, one in the Naval Reserve \u2014 are honored at Calvary Cemetery, a testament to a family's commitment to service.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/cavanaugh__d_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cavanaugh__d_usnr_ww_ii",
+    "name": "D. Cavanaugh",
+    "branch": "U.S. Naval Reserve",
+    "branchLabel": "USNR \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1868028,
+    "lng": -72.6277,
+    "story": "D. Cavanaugh served in the United States Naval Reserve during World War II. The USNR mobilized rapidly after Pearl Harbor, supplementing active-duty Navy forces in convoy escort, carrier operations, and shore installations across both oceans. Two Cavanaugh veterans rest at Calvary Cemetery.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/cavanaugh__d_usnr_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "clapp__j_army_ww_ii",
+    "name": "J. Clapp",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188592,
+    "lng": -72.629258,
+    "story": "J. Clapp served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/clapp__j_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "clark__j_navy_ww_i",
+    "name": "J. Clark",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1885,
+    "lng": -72.6293806,
+    "story": "J. Clark served in the United States Navy during World War I. The Navy's critical mission in WWI was protecting Atlantic shipping lanes from German U-boats \u2014 a battle waged in constant danger, far from public view. Clark is among Calvary Cemetery's WWI naval veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/clark__j_navy_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "clayton__w_army_ww_i",
+    "name": "W. Clayton",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.188122,
+    "lng": -72.628692,
+    "story": "W. Clayton served in the U.S. Army during World War I. American doughboys arrived on the Western Front in 1917 and helped turn the tide of a war that had ground Europe to a standstill for four years. Further details about Clayton's service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/clayton__w_army_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "coburn__james_died_in_france",
+    "name": "James Coburn",
+    "branch": "U.S. Military",
+    "branchLabel": "KIA \u00b7 France \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187217,
+    "lng": -72.627625,
+    "flags": [
+      "KIA"
+    ],
+    "story": "James Coburn died in France during World War I. Among the most solemn of Calvary Cemetery's veteran markers, this stone honors a Holyoke soldier who gave everything on the Western Front. Coburn's body remained overseas while his name is remembered here at home \u2014 a KIA memorial stone for a man who never came back.",
+    "color": "#8b0000",
+    "icon": "\u271d",
+    "photo": "photos/coburn__james_died_in_france.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "collins__d_vietnam_bronze_star",
+    "name": "D. Collins",
+    "branch": "U.S. Military",
+    "branchLabel": "Vietnam \u00b7 Bronze Star",
+    "era": "Vietnam",
+    "lat": 42.187472,
+    "lng": -72.627481,
+    "flags": [
+      "Bronze Star"
+    ],
+    "story": "D. Collins served during the Vietnam War and was awarded the Bronze Star \u2014 one of the U.S. military's highest combat decorations, recognizing heroic or meritorious service in a combat zone. The Collins family legacy at Calvary Cemetery spans three conflicts: Civil War, World War II, and Vietnam.",
+    "color": "#8b0000",
+    "icon": "\u2605",
+    "photo": "photos/collins__d_vietnam_bronze_star.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "collins__j_navy_ww_ii",
+    "name": "J. Collins",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187461,
+    "lng": -72.627511,
+    "story": "J. Collins served in the United States Navy during World War II. The Collins family at Calvary Cemetery spans from the Civil War to Vietnam \u2014 P. Collins in the Massachusetts Infantry, J. Collins in the Navy during WWII, and D. Collins earning a Bronze Star in Vietnam.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/collins__j_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "collins__p_mass_inf",
+    "name": "P. Collins",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 Civil War",
+    "era": "Civil War Era",
+    "lat": 42.186989,
+    "lng": -72.627664,
+    "story": "P. Collins served in the Massachusetts Infantry, almost certainly during the Civil War (1861-1865). Massachusetts regiments fought throughout the Eastern Theater, from the First Battle of Bull Run to the surrender at Appomattox. Collins is one of Calvary Cemetery's oldest veteran burials \u2014 a soldier from America's most costly conflict.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/collins__p_mass_inf.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "colon__d_army_ww_ii",
+    "name": "D. Colon",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188903,
+    "lng": -72.629739,
+    "story": "D. Colon served in the U.S. Army during World War II. Colon represents Holyoke's Latino community among those who served \u2014 Puerto Rican and Latino veterans from Western Massachusetts contributed significantly to the WWII effort. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/colon__d_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "concannon__j_army_ww_ii",
+    "name": "J. Concannon",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1881,
+    "lng": -72.6276333,
+    "story": "J. Concannon served in the U.S. Army during World War II. Together with M. Concannon (Army) and L. Concannon (USAF, WWII and Korea, Air Medal), the Concannon family represents one of the most remarkable multi-member veteran legacies at Calvary Cemetery.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/concannon__j_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "concannon__l_usaf_ww_ii_korea",
+    "name": "L. Concannon",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF \u00b7 WWII & Korea",
+    "era": "World War II",
+    "lat": 42.188094,
+    "lng": -72.627747,
+    "flags": [
+      "Air Medal"
+    ],
+    "story": "L. Concannon served in the United States Air Force during both World War II and the Korean War \u2014 a rare double-era veteran \u2014 and was awarded the Air Medal. The Air Medal is awarded for meritorious achievement in aerial flight, marking Concannon as a decorated airman across two conflicts. The Concannon family's service is one of the most extensive at Calvary Cemetery.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/concannon__l_usaf_ww_ii__korea__am.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "concannon__m_army_ww_ii",
+    "name": "M. Concannon",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187514,
+    "lng": -72.627183,
+    "story": "M. Concannon served in the U.S. Army during World War II. The Concannon family sent multiple members to serve \u2014 M. and J. Concannon in the Army, and L. Concannon in the Air Force spanning WWII and Korea. One of Calvary Cemetery's notable multi-veteran family clusters.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/concannon__m_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "connelly_ww_ii",
+    "name": "Connelly",
+    "branch": "U.S. Military",
+    "branchLabel": "Military \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188569,
+    "lng": -72.629119,
+    "story": "Connelly served in the U.S. Military during World War II. Further details about their branch and service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/connelly_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "conner__c_army_ww_ii",
+    "name": "C. Conner",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188678,
+    "lng": -72.628464,
+    "story": "C. Conner served in the U.S. Army during World War II. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/conner__c_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "connor",
+    "name": "J. Connor",
+    "branch": "Army Air Corps",
+    "branchLabel": "Army Air Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.18792222222222,
+    "lng": -72.62973055555555,
+    "story": "J. Connor served in the Army Air Corps during World War II. The Army Air Corps \u2014 predecessor to the modern U.S. Air Force \u2014 flew some of the most dangerous missions of the war, including strategic bombing raids over Nazi-occupied Europe and close air support in the Pacific theater.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/connor.jpg"
+  },
+  {
+    "id": "connor__j_army_air_corps_ww_ii",
+    "name": "J. Connor",
+    "branch": "U.S. Army Air Corps",
+    "branchLabel": "Army Air Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187922,
+    "lng": -72.629731,
+    "story": "J. Connor served in the United States Army Air Corps during World War II. The USAAC flew strategic bombing missions over Europe and the Pacific. The Connor family at Calvary Cemetery spans WWI, WWII, and the Coast Guard.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/connor__j_army_air_corps_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "connor__t_army_ww_i",
+    "name": "T. Connor",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187472,
+    "lng": -72.627411,
+    "story": "T. Connor served in the U.S. Army during World War I. Holyoke sent many sons to the Great War in 1917, and Connor was among them. The Connor family spans WWI, WWII, and the Coast Guard \u2014 a multi-generation legacy of service.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/connor__t_army_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "connor__w_qm_corps",
+    "name": "W. Connor",
+    "branch": "Quartermaster Corps",
+    "branchLabel": "QM Corps \u00b7 Army",
+    "era": "Unknown Era",
+    "lat": 42.187078,
+    "lng": -72.628236,
+    "story": "W. Connor served in the United States Army Quartermaster Corps \u2014 responsible for supplying troops with food, equipment, and logistics. Era of service is being researched. Two Connor veterans rest in close proximity at Calvary Cemetery.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/connor__w_qm_corps.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "connor__w_uscg_res_ww_ii",
+    "name": "W. Connor",
+    "branch": "U.S. Coast Guard Reserve",
+    "branchLabel": "USCG Reserve \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187064,
+    "lng": -72.628228,
+    "story": "W. Connor served in the United States Coast Guard Reserve during World War II. The USCGR mobilized rapidly after Pearl Harbor, supporting convoy escort, port security, and amphibious landings.",
+    "color": "#d4900a",
+    "icon": "\u2693",
+    "photo": "photos/connor__w_uscg_res_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "conway__j_mass_us_guards_ww_i",
+    "name": "J. Conway",
+    "branch": "Massachusetts US Guards",
+    "branchLabel": "MA US Guards \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1891111,
+    "lng": -72.6284472,
+    "story": "J. Conway served in the Massachusetts US Guards during World War I \u2014 a state defense force protecting critical infrastructure while National Guard units deployed overseas with the AEF. The Conway family served across two world wars.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/conway__j_mass_us_guards_ww_i.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "conway__j_e_uscg_ww_ii",
+    "name": "J.E. Conway",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "USCG \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187736,
+    "lng": -72.627786,
+    "story": "J.E. Conway served in the United States Coast Guard during World War II. The Conway family sent members to serve in both WWI and WWII \u2014 J. Conway with the Massachusetts US Guards and J.E. Conway with the Coast Guard.",
+    "color": "#d4900a",
+    "icon": "\u2693",
+    "photo": "photos/conway__j_e_uscg_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "counter__j_army_ww_ii",
+    "name": "J. Counter",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1870028,
+    "lng": -72.6283111,
+    "story": "J. Counter served in the U.S. Army during World War II. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/counter__j_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "courtney__j_m_army_ww_ii",
+    "name": "J. & M. Courtney",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII \u00b7 Shared Stone",
+    "era": "World War II",
+    "lat": 42.189768,
+    "lng": -72.629181,
+    "flags": [
+      "Shared Headstone"
+    ],
+    "story": "J. Courtney and M. Courtney share a headstone \u2014 two members of the Courtney family who served in the U.S. Army. J. served in WWII; M. Courtney era is being researched. A third Courtney, R., served with the Marines. The Courtney family sent multiple members to serve.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/courtney__j_m_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "courtney__j_armt_ww_ii",
+    "name": "J. Courtney",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1897694,
+    "lng": -72.6291806,
+    "story": "J. Courtney",
+    "photo": "photos/courtney__j_armt_ww_ii.jpg"
+  },
+  {
+    "id": "courtney__m_army",
+    "name": "M. Courtney",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1897667,
+    "lng": -72.6291806,
+    "story": "M. Courtney",
+    "photo": "photos/courtney__m_army_.jpg"
+  },
+  {
+    "id": "courtney",
+    "name": "R. Courtney",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC",
+    "era": "World War II",
+    "lat": 42.18780833333333,
+    "lng": -72.62921944444444,
+    "story": "R. Courtney served in the United States Marine Corps during World War II. Marines fought in some of the Pacific's most brutal island campaigns \u2014 Guadalcanal, Iwo Jima, Okinawa. Courtney is one of Holyoke's honored sons who wore the eagle, globe, and anchor.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/courtney.jpg"
+  },
+  {
+    "id": "courtney__r_usmc_ww_ii",
+    "name": "R. Courtney",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878083,
+    "lng": -72.6292194,
+    "story": "R. Courtney served in the United States Marine Corps during World War II. Marines fought some of the Pacific War's most brutal island campaigns. The Courtney family sent multiple members to serve \u2014 R. with the Marines, J. and M. with the Army.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/courtney__r_usmc_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "craven",
+    "name": "J.P. Craven",
+    "branch": "Army Air Forces",
+    "branchLabel": "AAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187838888888884,
+    "lng": -72.6295,
+    "story": "J.P. Craven served in the Army Air Forces during World War II. The AAF grew into the largest air force in history during the war, with members flying missions over Europe and the Pacific alike. Further details about his service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/craven.jpg"
+  },
+  {
+    "id": "craven__j_p_aaf_ww_ii",
+    "name": "J.P. Craven",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "USAAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878389,
+    "lng": -72.6295,
+    "story": "J.P. Craven served in the United States Army Air Forces during World War II, conducting strategic bombing campaigns over Nazi-occupied Europe and the Pacific.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/craven__j_p_aaf_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cray__j_usaaf_ww_ii",
+    "name": "J. Cray",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "USAAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.18885,
+    "lng": -72.6287917,
+    "story": "J. Cray served in the United States Army Air Forces during World War II. Further details about their service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/cray__j_usaaf_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cruz__p_army_vietnam",
+    "name": "P. Cruz",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1874194,
+    "lng": -72.6284417,
+    "story": "P. Cruz served in the U.S. Army during the Vietnam War. Cruz represents Holyoke's Latino community among those who answered the call during one of America's most contested conflicts. Further details about their service are being researched.",
+    "color": "#8b0000",
+    "icon": "\u2605",
+    "photo": "photos/cruz__p_army_vietnam.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "cullinan_korea",
+    "name": "Cullinan",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Korean War",
+    "lat": 42.1888611,
+    "lng": -72.6293944,
+    "story": "Cullinan served in the U.S. Military during Korean War. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2b50",
+    "photo": "photos/cullinan_korea.jpg"
+  },
+  {
+    "id": "curran",
+    "name": "P. Curran",
+    "branch": "U.S. Navy",
+    "branchLabel": "U.S. Navy",
+    "era": "World War II",
+    "lat": 42.187952777777774,
+    "lng": -72.62963888888888,
+    "story": "P. Curran served in the United States Navy during World War II. The Navy fought across two oceans \u2014 from Atlantic convoys keeping Britain alive to the island-hopping campaigns of the Pacific. Further details about his service are being researched.",
+    "color": "#1a3a8a",
+    "icon": "\u2693",
+    "photo": "photos/curran.jpg"
+  },
+  {
+    "id": "curran__p_navy_ww_ii",
+    "name": "P. Curran",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1879528,
+    "lng": -72.6296389,
+    "story": "P. Curran served in the United States Navy during World War II. The Navy fought across two oceans \u2014 from Atlantic convoy escort to the island-hopping campaigns of the Pacific. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/curran__p_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "czerwonka__j_g_army_ww_ii",
+    "name": "J.G. Czerwonka",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1886639,
+    "lng": -72.6295472,
+    "story": "J.G. Czerwonka",
+    "photo": "photos/czerwonka__j_g_army_ww_ii.jpg"
+  },
+  {
+    "id": "daly__r_navy_ww_ii",
+    "name": "R. Daly",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1885694,
+    "lng": -72.6291278,
+    "story": "R. Daly",
+    "photo": "photos/daly__r_navy_ww_ii.jpg"
+  },
+  {
+    "id": "davitt__w_ww_i_kia",
+    "name": "Rev. W. Davitt",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1883278,
+    "lng": -72.6288694,
+    "story": "Distinguished Service Cross. KIA.",
+    "photo": "photos/davitt__w_rev_amy_ww_i_dist_svc_cross__kia.jpg",
+    "flags": [
+      "KIA",
+      "Distinguished Service Cross"
+    ]
+  },
+  {
+    "id": "doerpholz",
+    "name": "F. Doerpholz",
+    "branch": "Army Air Forces",
+    "branchLabel": "AAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1879722,
+    "lng": -72.6292333,
+    "story": "F. Doerpholz served in the Army Air Forces during World War II. Whether as a pilot, navigator, bombardier, or ground crew, members of the AAF kept the skies contested and helped turn the tide of the war. Further details about his service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/doerpholz.jpg"
+  },
+  {
+    "id": "donoghue__h_usmc_ww_ii",
+    "name": "H. Donoghue",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884611,
+    "lng": -72.6284778,
+    "story": "H. Donoghue",
+    "photo": "photos/donoghue__h_usmc__ww_ii.jpg"
+  },
+  {
+    "id": "donoghue__j_usaaf",
+    "name": "J. Donoghue",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "USAAF",
+    "era": "World War II",
+    "lat": 42.1884028,
+    "lng": -72.6282194,
+    "story": "J. Donoghue",
+    "photo": "photos/donoghue__j_usaaf.jpg"
+  },
+  {
+    "id": "donogue__g_army_ww_ii",
+    "name": "G. Donogue",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878778,
+    "lng": -72.6278139,
+    "story": "G. Donogue",
+    "photo": "photos/donogue__g_army_ww_ii.jpg"
+  },
+  {
+    "id": "donohue__m_army_ww_ii",
+    "name": "M. Donohue",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1893778,
+    "lng": -72.6289444,
+    "story": "M. Donohue",
+    "photo": "photos/donohue__m_army_ww_ii.jpg"
+  },
+  {
+    "id": "dooley__t_ww_i",
+    "name": "T. Dooley",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1880139,
+    "lng": -72.6296472,
+    "story": "T. Dooley",
+    "photo": "photos/dooley__t_ww_i.jpg"
+  },
+  {
+    "id": "dougherty__j_mass_med_dept_ww_i",
+    "name": "J. Dougherty",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.18835,
+    "lng": -72.6283417,
+    "story": "Massachusetts Medical Dept.",
+    "photo": "photos/dougherty__j_mass_med_dept_ww_i.jpg"
+  },
+  {
+    "id": "dowd__f_mass",
+    "name": "F. Dowd",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1875083,
+    "lng": -72.6274806,
+    "story": "F. Dowd",
+    "photo": "photos/dowd__f_mass_.jpg"
+  },
+  {
+    "id": "duffy__j_army_ww_i",
+    "name": "J Duffy",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1893778,
+    "lng": -72.6293556,
+    "story": "J Duffy served in the U.S. Army during World War I. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/duffy__j_army_ww_i.jpg"
+  },
+  {
+    "id": "duffy__w_usaac_ww_ii",
+    "name": "W Duffy",
+    "branch": "Army Air Corps",
+    "branchLabel": "Corps",
+    "era": "World War II",
+    "lat": 42.1886056,
+    "lng": -72.6297306,
+    "story": "W Duffy served in the Army Air Corps during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a7c59",
+    "icon": "\u2708",
+    "photo": "photos/duffy__w_usaac_ww_ii.jpg"
+  },
+  {
+    "id": "dugan__j_navy_",
+    "name": "J Dugan",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy",
+    "era": "Unknown Era",
+    "lat": 42.1891278,
+    "lng": -72.6295472,
+    "story": "J Dugan served in the U.S. Navy during Unknown Era. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/dugan__j_navy_.jpg"
+  },
+  {
+    "id": "dunn__g_army_ww_ii",
+    "name": "G. Dunn",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1873389,
+    "lng": -72.6279306,
+    "story": "G. Dunn",
+    "photo": "photos/dunn__g_army_ww_ii.jpg"
+  },
+  {
+    "id": "egan__j_army_ww_ii",
+    "name": "J. Egan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188,
+    "lng": -72.6287167,
+    "story": "J. Egan",
+    "photo": "photos/egan__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "emerson__h_army_ww_i",
+    "name": "H. Emerson",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1880444,
+    "lng": -72.6292333,
+    "story": "H. Emerson",
+    "photo": "photos/emerson__h_army_ww_i.jpg"
+  },
+  {
+    "id": "falcetti__c_navy_ww_ii",
+    "name": "C Falcetti",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.189725,
+    "lng": -72.6292417,
+    "story": "C Falcetti served in the U.S. Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/falcetti__c_navy_ww_ii.jpg"
+  },
+  {
+    "id": "falcetti__j_d_army_ww_ii",
+    "name": "J Falcetti",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1896944,
+    "lng": -72.6292944,
+    "story": "J Falcetti served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/falcetti__j_d_army_ww_ii.jpg"
+  },
+  {
+    "id": "felsentreger__h_ww_ii_korea",
+    "name": "H. Felsentreger",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII/Korea",
+    "era": "World War II",
+    "lat": 42.1888056,
+    "lng": -72.6298611,
+    "story": "H. Felsentreger",
+    "photo": "photos/felsentreger__h_navy_ww_ii__korea.jpg"
+  },
+  {
+    "id": "felsentreger__h_t_usmc_vietnam",
+    "name": "H.T. Felsentreger",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1887083,
+    "lng": -72.6291667,
+    "story": "H.T. Felsentreger",
+    "photo": "photos/felsentreger__h_t_usmc_vietnam__purple_heart.jpg",
+    "flags": [
+      "Purple Heart"
+    ]
+  },
+  {
+    "id": "fenton__j_army_ww_ii",
+    "name": "J. Fenton",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1883389,
+    "lng": -72.6280222,
+    "story": "J. Fenton",
+    "photo": "photos/fenton__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "fetterman__s_cav",
+    "name": "S. Fetterman",
+    "branch": "U.S. Army",
+    "branchLabel": "Cavalry",
+    "era": "Pre-WWI / Early 20th Century",
+    "lat": 42.1880528,
+    "lng": -72.6295556,
+    "story": "S. Fetterman",
+    "photo": "photos/fetterman__s_cav.jpg"
+  },
+  {
+    "id": "finn__j_army_ww_ii",
+    "name": "J. Finn",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1876944,
+    "lng": -72.6284722,
+    "story": "J. Finn",
+    "photo": "photos/finn__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "finn__j_usmc_ww_i",
+    "name": "J. Finn",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1884278,
+    "lng": -72.6285472,
+    "story": "J. Finn",
+    "photo": "photos/finn__j_usmc_ww_i.jpg"
+  },
+  {
+    "id": "fitzsimmons__h_army",
+    "name": "H. Fitzsimmons",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1887333,
+    "lng": -72.6286778,
+    "story": "H. Fitzsimmons",
+    "photo": "photos/fitzsimmons__h_army_.jpg"
+  },
+  {
+    "id": "fitzsimmons__r_ww_i",
+    "name": "R. Fitzsimmons",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1887361,
+    "lng": -72.6286694,
+    "story": "Massachusetts Field Artillery Reserve.",
+    "photo": "photos/fitzsimmons__r_mass_fa_res_ww_i.jpg"
+  },
+  {
+    "id": "foley__j_j_army_ww_ii",
+    "name": "J.J. Foley",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882167,
+    "lng": -72.6296611,
+    "story": "J.J. Foley",
+    "photo": "photos/foley__j_j_army_ww_ii.jpg"
+  },
+  {
+    "id": "foley__r_navy_ww_ii",
+    "name": "R. Foley",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874306,
+    "lng": -72.6274944,
+    "story": "R. Foley",
+    "photo": "photos/foley__r_navy_ww_ii.jpg"
+  },
+  {
+    "id": "forhan__m_usnr_ww_ii",
+    "name": "M. Forhan",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871444,
+    "lng": -72.6275028,
+    "story": "M. Forhan",
+    "photo": "photos/forhan__m_usnr_ww_ii.jpg"
+  },
+  {
+    "id": "fulponi__j_army_ww_ii",
+    "name": "J. Fulponi",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878889,
+    "lng": -72.6292417,
+    "story": "J. Fulponi",
+    "photo": "photos/fulponi__j_army_wwii.jpg"
+  },
+  {
+    "id": "gallivan__e_army_ww_ii",
+    "name": "E. Gallivan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1879583,
+    "lng": -72.6295472,
+    "story": "E. Gallivan",
+    "photo": "photos/gallivan__e_army_ww_ii.jpg"
+  },
+  {
+    "id": "welch_gar",
+    "name": "Welch Gar",
+    "branchLabel": "Unknown",
+    "era": "Civil War Era",
+    "lat": 42.1884416666667,
+    "lng": -72.6292722222222,
+    "flags": [],
+    "photo": "photos/welch_gar.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "garvey__b_army_ww_i",
+    "name": "B. Garvey",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.18745,
+    "lng": -72.6275722,
+    "story": "B. Garvey",
+    "photo": "photos/garvey__b_army_ww_i.jpg"
+  },
+  {
+    "id": "st_germain__l_navy_ww_ii",
+    "name": "L. St Germain",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1887583,
+    "lng": -72.6289278,
+    "flags": [],
+    "photo": "photos/st_germain__l_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "gervais__w_army_ww_ii",
+    "name": "W. Gervais",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884917,
+    "lng": -72.6287083,
+    "story": "W. Gervais",
+    "photo": "photos/gervais__w_army_ww_ii.jpg"
+  },
+  {
+    "id": "gibbs__f_navy_ww_ii",
+    "name": "F. Gibbs",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884083,
+    "lng": -72.6282417,
+    "story": "F. Gibbs",
+    "photo": "photos/gibbs__f_navy_ww_ii.jpg"
+  },
+  {
+    "id": "girard__g_navy_ww_i",
+    "name": "G. Girard",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1871194,
+    "lng": -72.627175,
+    "story": "G. Girard",
+    "photo": "photos/girard__g_navy_ww_i.jpg"
+  },
+  {
+    "id": "gordon__m_usn_ww_ii",
+    "name": "M. Gordon",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882361,
+    "lng": -72.6290806,
+    "story": "M. Gordon",
+    "photo": "photos/gordon__m_usn_ww_ii.jpg"
+  },
+  {
+    "id": "gorman_a_navy",
+    "name": "A. Gorman",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1881417,
+    "lng": -72.6285333,
+    "story": "A. Gorman",
+    "photo": "photos/gorman_a_navy_.jpg"
+  },
+  {
+    "id": "gorman",
+    "name": "Gorman",
+    "branch": "U.S. Military",
+    "branchLabel": "Veteran",
+    "era": "World War II",
+    "lat": 42.1874556,
+    "lng": -72.6270611,
+    "story": "Gorman",
+    "photo": "photos/gorman.jpg"
+  },
+  {
+    "id": "greaney__h_army_ww_i",
+    "name": "H. Greaney",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1875139,
+    "lng": -72.6282056,
+    "story": "H. Greaney",
+    "photo": "photos/greaney__h_army_ww_i_.jpg"
+  },
+  {
+    "id": "greaney__w_navy_korea",
+    "name": "W. Greaney",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1875139,
+    "lng": -72.6282111,
+    "story": "W. Greaney",
+    "photo": "photos/greaney__w_navy_korea.jpg"
+  },
+  {
+    "id": "greenough__g_army_korea",
+    "name": "G. Greenough",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1886361,
+    "lng": -72.6291806,
+    "story": "G. Greenough",
+    "photo": "photos/greenough__g_army_korea.jpg"
+  },
+  {
+    "id": "greenough__r_army_ww_ii",
+    "name": "R. Greenough",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1886417,
+    "lng": -72.6291806,
+    "story": "R. Greenough",
+    "photo": "photos/greenough__r_army_ww_ii.jpg"
+  },
+  {
+    "id": "greenough__r_p_army_korea",
+    "name": "R.P. Greenough",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1886444,
+    "lng": -72.6291583,
+    "story": "R.P. Greenough",
+    "photo": "photos/greenough__r_p_army_korea.jpg"
+  },
+  {
+    "id": "gresh__j_ww_ii_ph",
+    "name": "J. Gresh",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1886167,
+    "lng": -72.6281583,
+    "story": "Massachusetts Infantry.",
+    "photo": "photos/gresh__j_mass_inf_ww_ii_ph.jpg",
+    "flags": [
+      "Purple Heart"
+    ]
+  },
+  {
+    "id": "griess__g_navy_ww_ii",
+    "name": "G. Griess",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1867861,
+    "lng": -72.627625,
+    "story": "G. Griess",
+    "photo": "photos/griess__g_navy_ww_ii.jpg"
+  },
+  {
+    "id": "grudis__j_army_ww_ii",
+    "name": "J Grudis",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.188658,
+    "lng": -72.629219,
+    "story": "J Grudis served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/grudis__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "guiel__p_army_ww_ii",
+    "name": "P. Guiel",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878056,
+    "lng": -72.6288833,
+    "story": "P. Guiel served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/guiel__p_army_ww_ii.jpg"
+  },
+  {
+    "id": "hafey__f_navy_korea",
+    "name": "F. Hafey",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1889111,
+    "lng": -72.6291583,
+    "story": "F. Hafey served in the U.S. Navy during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2693",
+    "photo": "photos/hafey__f_navy_korea.jpg"
+  },
+  {
+    "id": "hafey__j_army_ww_i",
+    "name": "J. Hafey",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1889694,
+    "lng": -72.6292333,
+    "story": "J. Hafey served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/hafey__j_army_ww_i.jpg"
+  },
+  {
+    "id": "hamel__j_uscg_ww_ii",
+    "name": "J. Hamel",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "Coast Guard \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878139,
+    "lng": -72.6287222,
+    "story": "J. Hamel served in the U.S. Coast Guard during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/hamel__j_uscg_ww_ii.jpg"
+  },
+  {
+    "id": "harrington__t_army_ww_ii",
+    "name": "T. Harrington",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1877056,
+    "lng": -72.6269389,
+    "story": "T. Harrington served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/harrington__t_army_ww_ii.jpg"
+  },
+  {
+    "id": "hart__w_navy_ww_i",
+    "name": "W. Hart",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187775,
+    "lng": -72.6274806,
+    "story": "W. Hart served in the U.S. Navy during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/hart__w_navy_ww_i.jpg"
+  },
+  {
+    "id": "hartling__g_army_korea",
+    "name": "G. Hartling",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1876806,
+    "lng": -72.6270667,
+    "story": "G. Hartling served in the U.S. Army during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/hartling__g_army_korea.jpg"
+  },
+  {
+    "id": "healy__j_t_army_ww_ii",
+    "name": "J.T. Healy",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878444,
+    "lng": -72.6277,
+    "story": "J.T. Healy served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/healy__j_t_army_ww_ii.jpg"
+  },
+  {
+    "id": "hebert",
+    "name": "G. Hebert",
+    "branch": "U.S. Navy",
+    "branchLabel": "U.S. Navy",
+    "era": "World War II",
+    "lat": 42.18954722222222,
+    "lng": -72.62901388888888,
+    "story": "G. Hebert served in the United States Navy during World War II. Further details about his service are being researched.",
+    "color": "#1a3a8a",
+    "icon": "\u2693",
+    "photo": "photos/hebert.jpg"
+  },
+  {
+    "id": "hegy__f_army",
+    "name": "F. Hegy",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1886139,
+    "lng": -72.6285083,
+    "story": "F. Hegy served in the U.S. Army during Unknown Era.",
+    "color": "#1a6abf",
+    "icon": "\u2605",
+    "photo": "photos/hegy__f_army.jpg"
+  },
+  {
+    "id": "hegy__g_army_ww_ii",
+    "name": "G. Hegy",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188625,
+    "lng": -72.6285556,
+    "story": "G. Hegy served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/hegy__g_army_ww_ii.jpg"
+  },
+  {
+    "id": "heisig__f_usaf",
+    "name": "F. Heisig",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1891861,
+    "lng": -72.6290139,
+    "story": "F. Heisig served in the U.S. Air Force during Unknown Era.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/heisig__f_usaf.jpg"
+  },
+  {
+    "id": "henderson__a_army_ww_i",
+    "name": "A. Henderson",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1873778,
+    "lng": -72.627525,
+    "story": "A. Henderson served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/henderson__a_army_ww_i.jpg"
+  },
+  {
+    "id": "hennessey__m_navy_ww_i_",
+    "name": "M. Hennessey",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1890194,
+    "lng": -72.6288611,
+    "story": "M. Hennessey served in the U.S. Navy during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/hennessey__m_navy_ww_i_.jpg"
+  },
+  {
+    "id": "hickson",
+    "name": "Hickson",
+    "branch": "Unknown",
+    "branchLabel": "Unknown \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1870917,
+    "lng": -72.6272139,
+    "story": "Hickson served in the Unknown during Unknown Era.",
+    "color": "#1a6abf",
+    "icon": "?",
+    "photo": "photos/hickson.jpg"
+  },
+  {
+    "id": "higgins__e_army_ww_ii",
+    "name": "E. Higgins",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1873167,
+    "lng": -72.6278444,
+    "story": "E. Higgins served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/higgins__e_army_ww_ii.jpg"
+  },
+  {
+    "id": "hoar__j_j_mass_ord_ww_ii",
+    "name": "J.J. Hoar",
+    "branch": "Ordnance Company",
+    "branchLabel": "Ordnance Company \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1890194,
+    "lng": -72.629075,
+    "story": "J.J. Hoar served in the Ordnance Company during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/hoar__j_j_mass_ord_ww_ii.jpg"
+  },
+  {
+    "id": "hoar_r_f_army_ww_ii",
+    "name": "R.F. Hoar",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1880833,
+    "lng": -72.6287167,
+    "story": "R.F. Hoar served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/hoar_r_f_army_ww_ii.jpg"
+  },
+  {
+    "id": "hogan_ww_i_",
+    "name": "Hogan",
+    "branch": "Unknown",
+    "branchLabel": "Unknown \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1878889,
+    "lng": -72.6282722,
+    "story": "Hogan served in the Unknown during World War I. First name not on stone.",
+    "color": "#6a4a8a",
+    "icon": "?",
+    "photo": "photos/hogan_ww_i_.jpg"
+  },
+  {
+    "id": "hogan__j_navy_ww_i",
+    "name": "J. Hogan",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187825,
+    "lng": -72.6283111,
+    "story": "J. Hogan served in the U.S. Navy during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/hogan__j_navy_ww_i.jpg"
+  },
+  {
+    "id": "hogan__t_mass_inf_",
+    "name": "T. Hogan",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1876028,
+    "lng": -72.6272278,
+    "story": "T. Hogan served in the Massachusetts Infantry during Unknown Era. Era not on stone.",
+    "color": "#1a6abf",
+    "icon": "\u2605",
+    "photo": "photos/hogan__t_mass_inf_.jpg"
+  },
+  {
+    "id": "hurley__g_r_usaf_vietnam",
+    "name": "G.R. Hurley",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1879806,
+    "lng": -72.6296306,
+    "story": "G.R. Hurley served in the U.S. Air Force during Vietnam.",
+    "color": "#bf2020",
+    "icon": "\u2708",
+    "photo": "photos/hurley__g_r_usaf_vietnam.jpg"
+  },
+  {
+    "id": "hurley__w_navy_ww_ii",
+    "name": "W. Hurley",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874861,
+    "lng": -72.6281444,
+    "story": "W. Hurley served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/hurley__w_navy_ww_ii.jpg"
+  },
+  {
+    "id": "hyde__j_army_ww_ii",
+    "name": "J. Hyde",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1896056,
+    "lng": -72.6292194,
+    "story": "J. Hyde served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/hyde__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "reynoldds_h_army_ww_ii",
+    "name": "Reynoldds H Army Ww Ii",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.18785,
+    "lng": -72.6277556,
+    "flags": [],
+    "photo": "photos/reynoldds_h_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan_c_navy_ww_ii",
+    "name": "Sullivan C Navy Ww Ii",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1877167,
+    "lng": -72.6272722,
+    "flags": [],
+    "photo": "photos/sullivan_c_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "jones__h_army_ww_i",
+    "name": "H. Jones",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1868083,
+    "lng": -72.6277,
+    "story": "H. Jones served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/jones__h_army_ww_i.jpg"
+  },
+  {
+    "id": "jones__r_usmc_ww_ii",
+    "name": "R. Jones",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "Marine Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1868333,
+    "lng": -72.6277,
+    "story": "R. Jones served in the U.S. Marine Corps during World War II. Adjacent to H. Jones \u2014 likely family.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/jones__r_usmc_ww_ii.jpg"
+  },
+  {
+    "id": "heigle__c_jr_usaf_vietnam",
+    "name": "C. Heigle Jr.",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1870083,
+    "lng": -72.627525,
+    "story": "C. Heigle Jr. served in the U.S. Air Force during Vietnam.",
+    "color": "#bf2020",
+    "icon": "\u2708",
+    "photo": "photos/heigle__c_jr_usaf_vietnam.jpg"
+  },
+  {
+    "id": "bedard__e_jr_usmc_vietnam",
+    "name": "E. Bedard Jr.",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.189689,
+    "lng": -72.629197,
+    "story": "E. Bedard Jr. served in the United States Marine Corps during the Vietnam War. Marines bore some of the heaviest combat of the Vietnam War, from the siege of Khe Sanh to the Tet Offensive. The 'Jr.' designation suggests his father also served \u2014 a family legacy of answering the call across generations.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/bedard__e_jr_usmc_vietnam.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "baldassaro__g_jr_usaf",
+    "name": "G. Baldassaro Jr.",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF",
+    "era": "Unknown Era",
+    "lat": 42.187308,
+    "lng": -72.627961,
+    "story": "G. Baldassaro Jr. served in the United States Air Force. The 'Jr.' suggests a father-son legacy of service. Era of service is being researched \u2014 if you have information about this veteran, please contact us.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/baldassaro__g_jr_usaf.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "o_connell__h_jr_usaac_ww_ii",
+    "name": "H. O'Connell Jr.",
+    "branch": "Army Air Corps",
+    "branchLabel": "USAAC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1891972,
+    "lng": -72.6288139,
+    "story": "H. O'Connell Jr. served in the United States Army Air Corps during World War II. The USAAC \u2014 predecessor to the modern Air Force \u2014 flew strategic bombing missions over Europe and the Pacific. Further details about their service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/o_connell__h_jr_usaac_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "anderson__j_jr_army_ww_ii",
+    "name": "J. Anderson Jr.",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882083,
+    "lng": -72.6290056,
+    "story": "J. Anderson Jr. served in the U.S. Army during World War II. The 'Jr.' designation suggests a father-son legacy \u2014 Anderson Sr. may also have served. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/anderson__j_jr_army_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "chrzan__s_jr_navy_ww_ii",
+    "name": "S. Chrzan Jr.",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188525,
+    "lng": -72.62925,
+    "story": "S. Chrzan Jr. served in the United States Navy during World War II. The 'Jr.' designation suggests a father-son legacy of service. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/chrzan__s_jr_navy_ww_ii.jpg",
+    "source": "session10"
+  },
+  {
+    "id": "halpin__t_jr_usaf_ww_ii",
+    "name": "T. Halpin Jr.",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871306,
+    "lng": -72.6279833,
+    "story": "T. Halpin Jr. served in the U.S. Air Force during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2708",
+    "photo": "photos/halpin__t_jr_usaf_ww_ii.jpg"
+  },
+  {
+    "id": "martin__t_jr_army_korea",
+    "name": "T. Martin Jr.",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1870472,
+    "lng": -72.6299667,
+    "story": "T. Martin Jr. served in the U.S. Army during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/martin__t_jr_army_korea.jpg"
+  },
+  {
+    "id": "lacey__w_f_jr_navy_wwii",
+    "name": "W.F. Lacey Jr.",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1881111,
+    "lng": -72.6292639,
+    "story": "W.F. Lacey Jr. served in the United States Navy during World War II. The Lacey family sent both W.F. Lacey Jr. and R.M. Lacey to serve during the war. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "kamont__v_navy_ww_ii",
+    "name": "V. Kamont",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188325,
+    "lng": -72.6292583,
+    "story": "V. Kamont served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/kamont__v_navy_ww_ii.jpg"
+  },
+  {
+    "id": "kane__e_f_us_cavalry",
+    "name": "E Kane",
+    "branch": "U.S. Cavalry",
+    "branchLabel": "Cavalry",
+    "era": "Unknown Era",
+    "lat": 42.188642,
+    "lng": -72.629653,
+    "story": "E Kane served in the U.S. Cavalry during Unknown Era. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#8b6914",
+    "icon": "\u2b50",
+    "photo": "photos/kane__e_f_us_cavalry.jpg"
+  },
+  {
+    "id": "kane_ef",
+    "name": "E.F. Kane",
+    "branch": "U.S. Cavalry",
+    "branchLabel": "U.S. Cavalry",
+    "era": "Pre-WWI / Early 20th Century",
+    "lat": 42.18864166666666,
+    "lng": -72.62965277777776,
+    "story": "E.F. Kane served in the United States Cavalry, one of the oldest branches of American military tradition. The Cavalry played a central role in the Indian Wars and the Spanish-American War before transitioning to mechanized units in the early 20th century. Further details about his service are being researched.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/kane_ef.jpg"
+  },
+  {
+    "id": "kane__j_usaf_korea",
+    "name": "J. Kane",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1885,
+    "lng": -72.6293861,
+    "story": "J. Kane served in the U.S. Air Force during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2708",
+    "photo": "photos/kane__j_usaf_korea.jpg"
+  },
+  {
+    "id": "kane_t",
+    "name": "T. Kane",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.188686,
+    "lng": -72.629631,
+    "story": "T. Kane served in the U.S. Military during Unknown Era. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2b50",
+    "photo": "photos/kane_t.jpg"
+  },
+  {
+    "id": "kane__w_army_ww_ii",
+    "name": "W. Kane",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874778,
+    "lng": -72.6276694,
+    "story": "W. Kane served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kane__w_army_ww_ii.jpg"
+  },
+  {
+    "id": "kapinos__j_navy_korea",
+    "name": "J. Kapinos",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1895361,
+    "lng": -72.62915,
+    "story": "J. Kapinos served in the U.S. Navy during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2693",
+    "photo": "photos/kapinos__j_navy_korea.jpg"
+  },
+  {
+    "id": "kelly__j_t_army_ww_ii",
+    "name": "J Kelly",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.188642,
+    "lng": -72.629692,
+    "story": "J Kelly served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/kelly__j_t_army_ww_ii.jpg"
+  },
+  {
+    "id": "kelly__j_j_army_kia_ww_i",
+    "name": "J.J. Kelly",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1870083,
+    "lng": -72.6280833,
+    "story": "J.J. Kelly served in the U.S. Army during World War I. KIA \u2014 Killed in Action.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/kelly__j_j_army_kia_ww_i.jpg"
+  },
+  {
+    "id": "kelly__j_j_mass_inf_ww_i_ph",
+    "name": "J.J. Kelly",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1877972,
+    "lng": -72.6289,
+    "story": "J.J. Kelly served in the Massachusetts Infantry during World War I. Purple Heart.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/kelly__j_j_mass_inf_ww_i_ph.jpg"
+  },
+  {
+    "id": "kelly__t_j_army_ww_ii___korea",
+    "name": "T.J. Kelly",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1867972,
+    "lng": -72.6275417,
+    "story": "T.J. Kelly served in the U.S. Army during World War II. Also served Korea.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kelly__t_j_army_ww_ii___korea.jpg"
+  },
+  {
+    "id": "kelly__w_us_merch_marine_ww_ii",
+    "name": "W. Kelly",
+    "branch": "U.S. Merchant Marine",
+    "branchLabel": "Merchant Marine \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188075,
+    "lng": -72.6273722,
+    "story": "W. Kelly served in the U.S. Merchant Marine during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/kelly__w_us_merch_marine_ww_ii.jpg"
+  },
+  {
+    "id": "kennedy__e_w_inf_abn_ww_ii",
+    "name": "E.W. Kennedy",
+    "branch": "U.S. Infantry",
+    "branchLabel": "Infantry \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878694,
+    "lng": -72.6274417,
+    "story": "E.W. Kennedy served in the U.S. Infantry during World War II. Airborne.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kennedy__e_w_inf_abn_ww_ii.jpg"
+  },
+  {
+    "id": "kennedy__f_army_ww_ii",
+    "name": "F. Kennedy",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1891417,
+    "lng": -72.6287611,
+    "story": "F. Kennedy served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kennedy__f_army_ww_ii.jpg"
+  },
+  {
+    "id": "kennedy__j_m_us_army_air_corps_ww_ii",
+    "name": "J.M. Kennedy",
+    "branch": "U.S. Army Air Corps",
+    "branchLabel": "Army Air Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1873472,
+    "lng": -72.6276167,
+    "story": "J.M. Kennedy served in the U.S. Army Air Corps during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2708",
+    "photo": "photos/kennedy__j_m_us_army_air_corps_ww_ii.jpg"
+  },
+  {
+    "id": "kennedy__j_p_usnrf",
+    "name": "J.P. Kennedy",
+    "branch": "U.S. Naval Reserve Force",
+    "branchLabel": "Naval Reserve Force \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1878278,
+    "lng": -72.6272889,
+    "story": "J.P. Kennedy served in the U.S. Naval Reserve Force during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/kennedy__j_p_usnrf.jpg"
+  },
+  {
+    "id": "kennedy__m_f_mass_inf_civil_war",
+    "name": "M.F. Kennedy",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 Civil War",
+    "era": "Civil War Era",
+    "lat": 42.188175,
+    "lng": -72.6277861,
+    "story": "M.F. Kennedy served in the Massachusetts Infantry during Civil War.",
+    "color": "#8B4513",
+    "icon": "\u2605",
+    "photo": "photos/kennedy__m_f_mass_inf_civil_war.jpg"
+  },
+  {
+    "id": "kennedy__r_mass_infantry_ww_i",
+    "name": "R. Kennedy",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1891583,
+    "lng": -72.6287611,
+    "story": "R. Kennedy served in the Massachusetts Infantry during World War I. 1.8m from F. Kennedy \u2014 likely family plot.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/kennedy__r_mass_infantry_ww_i.jpg"
+  },
+  {
+    "id": "kenz__s_army_ww_ii",
+    "name": "S. Kenz",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882083,
+    "lng": -72.6296833,
+    "story": "S. Kenz served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kenz__s_army_ww_ii.jpg"
+  },
+  {
+    "id": "king__j_n_navy_wwii",
+    "name": "J.N. King",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1883194,
+    "lng": -72.6295472,
+    "story": "J.N. King served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/king__j_n_navy_wwii.jpg"
+  },
+  {
+    "id": "kleindienst__g_coast_art_ww_i",
+    "name": "G. Kleindienst",
+    "branch": "U.S. Coast Artillery",
+    "branchLabel": "Coast Artillery \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1885806,
+    "lng": -72.6283194,
+    "story": "G. Kleindienst served in the U.S. Coast Artillery during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/kleindienst__g_coast_art_ww_i.jpg"
+  },
+  {
+    "id": "kmon__w_army_ww_ii",
+    "name": "W. Kmon",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1870944,
+    "lng": -72.62825,
+    "story": "W. Kmon served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/kmon__w_army_ww_ii.jpg"
+  },
+  {
+    "id": "konopka__c_army_ww_ii",
+    "name": "C. Konopka",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874306,
+    "lng": -72.6271583,
+    "story": "C. Konopka served in the U.S. Army during World War II. 4.4m from G. Konopka \u2014 likely family.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/konopka__c_army_ww_ii.jpg"
+  },
+  {
+    "id": "konopka__g_usn_ww_ii",
+    "name": "G. Konopka",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187425,
+    "lng": -72.6271972,
+    "story": "G. Konopka served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/konopka__g_usn_ww_ii.jpg"
+  },
+  {
+    "id": "kosinski__c_navy_ww_ii__korea",
+    "name": "C. Kosinski",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1870694,
+    "lng": -72.6274944,
+    "story": "C. Kosinski served in the U.S. Navy during World War II. Also served Korea.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/kosinski__c_navy_ww_ii__korea.jpg"
+  },
+  {
+    "id": "lacey__r_m_army_ww_ii",
+    "name": "R.M. Lacey",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.188075,
+    "lng": -72.6292639,
+    "story": "R.M. Lacey served in the U.S. Army during World War II. The Lacey family sent two members to serve \u2014 R.M. in the Army and W.F. Lacey Jr. in the Navy. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "lacoste__h_army_",
+    "name": "H. Lacoste",
+    "branch": "U.S. Army",
+    "branchLabel": "U.S. Army",
+    "era": "Unknown Era",
+    "lat": 42.1876806,
+    "lng": -72.6278694,
+    "story": "H. Lacoste served in the U.S. Army. Further details about their era and service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "laferriere__e_usn_",
+    "name": "E. Laferriere",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1881222,
+    "lng": -72.6276472,
+    "story": "E. Laferriere served in the U.S. Navy during Unknown Era. Era not on stone.",
+    "color": "#1a6abf",
+    "icon": "\u2693",
+    "photo": "photos/laferriere__e_usn_.jpg"
+  },
+  {
+    "id": "lajoie__f_mass_inf",
+    "name": "F. Lajoie",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1884111,
+    "lng": -72.6280833,
+    "story": "F. Lajoie served in the Massachusetts Infantry during Unknown Era. Era not on stone. 4.9m from J.E. Lajoie \u2014 likely family..",
+    "color": "#1a6abf",
+    "icon": "\u2605",
+    "photo": "photos/lajoie__f_mass_inf.jpg"
+  },
+  {
+    "id": "lajoie__j_e_army_ww_ii",
+    "name": "J.E. Lajoie",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884472,
+    "lng": -72.6280583,
+    "story": "J.E. Lajoie served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/lajoie__j_e_army_ww_ii.jpg"
+  },
+  {
+    "id": "lange__f_army_wwi_purple_heart",
+    "name": "F. Lange",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1871139,
+    "lng": -72.6271528,
+    "story": "F. Lange served in the U.S. Army during World War I. Purple Heart.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/lange__f_army_wwi_purple_heart.jpg"
+  },
+  {
+    "id": "lappin__b_mass_evac_hosp_med_dept",
+    "name": "B. Lappin",
+    "branch": "Massachusetts Evacuation Hospital, Medical Dept.",
+    "branchLabel": "MA Evacuation Hospital, Medical Dept. \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1872417,
+    "lng": -72.6276389,
+    "story": "B. Lappin served in the Massachusetts Evacuation Hospital, Medical Dept. during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u271a",
+    "photo": "photos/lappin__b_mass_evac_hosp_med_dept.jpg"
+  },
+  {
+    "id": "laughter__a_r_usaaf_ww_ii",
+    "name": "A.R. Laughter",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "Army Air Forces \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1894944,
+    "lng": -72.6289667,
+    "story": "A.R. Laughter served in the U.S. Army Air Forces during World War II. 1.9m from J.J. Laughter \u2014 likely family..",
+    "color": "#1a3a6b",
+    "icon": "\u2708",
+    "photo": "photos/laughter__a_r_usaaf_ww_ii.jpg"
+  },
+  {
+    "id": "laughter__j_j_usmc_vietnam",
+    "name": "J.J. Laughter",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "Marine Corps \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1895111,
+    "lng": -72.6289667,
+    "story": "J.J. Laughter served in the U.S. Marine Corps during Vietnam.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/laughter__j_j_usmc_vietnam.jpg"
+  },
+  {
+    "id": "lavelle__e_navy_ww_ii",
+    "name": "E. Lavelle",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878583,
+    "lng": -72.6287167,
+    "story": "E. Lavelle served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/lavelle__e_navy_ww_ii.jpg"
+  },
+  {
+    "id": "lawrence__g_army_ww_i",
+    "name": "G. Lawrence",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1870111,
+    "lng": -72.6276083,
+    "story": "G. Lawrence served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/lawrence__g_army_ww_i.jpg"
+  },
+  {
+    "id": "leahy",
+    "name": "D. Leahy",
+    "branch": "Massachusetts Cavalry",
+    "branchLabel": "MA Cavalry",
+    "era": "Civil War Era",
+    "lat": 42.189299999999996,
+    "lng": -72.62946944444444,
+    "story": "D. Leahy served in the Massachusetts Cavalry, almost certainly during the Civil War (1861\u20131865). Massachusetts sent tens of thousands of men to preserve the Union, and its cavalry regiments fought in campaigns from Virginia to the Shenandoah Valley. Leahy represents one of Calvary Cemetery's oldest veteran burials.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/leahy.jpg"
+  },
+  {
+    "id": "leahy__d_mass_cavalry",
+    "name": "D. Leahy",
+    "branch": "Massachusetts Cavalry",
+    "branchLabel": "MA Cavalry \u00b7 Civil War",
+    "era": "Civil War Era",
+    "lat": 42.1893,
+    "lng": -72.6294694,
+    "story": "D. Leahy served in the Massachusetts Cavalry, almost certainly during the Civil War (1861\u20131865). Massachusetts cavalry regiments fought in campaigns from Virginia to the Shenandoah Valley. Leahy represents one of Calvary Cemetery's oldest veteran burials \u2014 a soldier from America's most costly conflict.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/leahy__d_mass_cavalry.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "leahy_j_j_mtc_ww_i_",
+    "name": "J.J. Leahy",
+    "branch": "Motor Transport Corps",
+    "branchLabel": "MTC \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1874389,
+    "lng": -72.6273722,
+    "story": "J.J. Leahy served in the Motor Transport Corps during World War I. The MTC was responsible for moving troops, supplies, and equipment across the chaotic roads of wartime France \u2014 a logistical role that was essential to sustaining the American Expeditionary Forces on the Western Front.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/leahy_j_j_mtc_ww_i_.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "leary__f_army_wwi",
+    "name": "F. Leary",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187775,
+    "lng": -72.6277556,
+    "story": "F. Leary served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/leary__f_army_wwi.jpg"
+  },
+  {
+    "id": "leary__g_navy_ww_ii",
+    "name": "G. Leary",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871806,
+    "lng": -72.6282417,
+    "story": "G. Leary served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/leary__g_navy_ww_ii.jpg"
+  },
+  {
+    "id": "leary__t_f_navy_ww_ii",
+    "name": "T.F. Leary",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1872028,
+    "lng": -72.6274333,
+    "story": "T.F. Leary served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/leary__t_f_navy_ww_ii.jpg"
+  },
+  {
+    "id": "leblanc__a_usmc_ww_i",
+    "name": "A. LeBlanc",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "Marine Corps \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1872889,
+    "lng": -72.6270917,
+    "story": "A. LeBlanc served in the U.S. Marine Corps during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/leblanc__a_usmc_ww_i.jpg"
+  },
+  {
+    "id": "leclair__e_navy_ww_ii_",
+    "name": "E. LeClair",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1889083,
+    "lng": -72.6289139,
+    "story": "E. LeClair served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/leclair__e_navy_ww_ii_.jpg"
+  },
+  {
+    "id": "lee__r_army_ww_ii",
+    "name": "R. Lee",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882278,
+    "lng": -72.6293861,
+    "story": "R. Lee served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/lee__r_army_ww_ii.jpg"
+  },
+  {
+    "id": "liebeck__e_army_ww_ii",
+    "name": "E. Liebeck",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1876444,
+    "lng": -72.6280139,
+    "story": "E. Liebeck served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/liebeck__e_army_ww_ii.jpg"
+  },
+  {
+    "id": "liebel__m_usn_ww_ii",
+    "name": "M. Liebel",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1878556,
+    "lng": -72.6287167,
+    "story": "M. Liebel served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/liebel__m_usn_ww_ii.jpg"
+  },
+  {
+    "id": "losty__j_army_ww_ii",
+    "name": "J. Losty",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1875444,
+    "lng": -72.6270306,
+    "story": "J. Losty served in the U.S. Army during World War II. The Losty family contributed multiple members to the war effort across different branches of service.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "losty__j_uscg_ww_ii",
+    "name": "J. Losty",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "USCG \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1875444,
+    "lng": -72.6270361,
+    "story": "J. Losty served in the United States Coast Guard during World War II. The Losty family sent multiple members to serve across different branches \u2014 a remarkable example of a Holyoke family's collective sacrifice.",
+    "color": "#d4900a",
+    "icon": "\u2693",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "losty____navy_ww_ii_ph",
+    "name": "Losty",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1875444,
+    "lng": -72.6270361,
+    "flags": [
+      "Purple Heart"
+    ],
+    "story": "Losty served in the United States Navy during World War II and was awarded the Purple Heart. The Losty family sent multiple members to serve \u2014 a family marked by both patriotism and sacrifice, with two Purple Hearts earned across their service.",
+    "color": "#7b2fbe",
+    "icon": "\u2693",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "losty__w_usn_ww_ii_ph",
+    "name": "W. Losty",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1875444,
+    "lng": -72.6270306,
+    "flags": [
+      "Purple Heart"
+    ],
+    "story": "W. Losty served in the United States Navy during World War II and was awarded the Purple Heart. The Losty family sent multiple members to serve \u2014 W. Losty and another Losty in the Navy, and J. Losty in both the Coast Guard and Army. W. Losty's Purple Heart marks a wound suffered in the service of his country.",
+    "color": "#7b2fbe",
+    "icon": "\u2693",
+    "photo": "",
+    "source": "session8"
+  },
+  {
+    "id": "loudon__n_navy_ww_i",
+    "name": "N. Loudon",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1879806,
+    "lng": -72.6297139,
+    "story": "N. Loudon served in the U.S. Navy during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/loudon__n_navy_ww_i.jpg"
+  },
+  {
+    "id": "lupien__h_",
+    "name": "H. Lupien",
+    "branch": "Unknown",
+    "branchLabel": "Unknown \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1869917,
+    "lng": -72.6272056,
+    "story": "H. Lupien served in the Unknown during Unknown Era. Branch/era not on stone. 2.5m from H. Mahoney \u2014 likely adjacent plot..",
+    "color": "#1a6abf",
+    "icon": "?",
+    "photo": "photos/lupien__h_.jpg"
+  },
+  {
+    "id": "madru__l_army_ww_i",
+    "name": "L. Madru",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1886778,
+    "lng": -72.62815,
+    "story": "L. Madru served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/madru__l_army_ww_i.jpg"
+  },
+  {
+    "id": "mahoney__h_army_ww_ii",
+    "name": "H. Mahoney",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1869861,
+    "lng": -72.6272278,
+    "story": "H. Mahoney served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mahoney__h_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mahoney__w_navy_ww_ii",
+    "name": "W Mahoney",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1887806,
+    "lng": -72.6293556,
+    "story": "W Mahoney served in the U.S. Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/mahoney__w_navy_ww_ii.jpg"
+  },
+  {
+    "id": "maloney__t_navy_ww_ii",
+    "name": "T. Maloney",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1884306,
+    "lng": -72.6284333,
+    "story": "T. Maloney served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/maloney__t_navy_ww_ii.jpg"
+  },
+  {
+    "id": "mann__e_killed_in_france_ww_i",
+    "name": "E. Mann",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1873028,
+    "lng": -72.6276472,
+    "story": "E. Mann served in the U.S. Army during World War I. Killed in France \u2014 KIA WWI. 5m from H.L. Mann \u2014 likely family..",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mann__e_killed_in_france_ww_i.jpg"
+  },
+  {
+    "id": "mann__e_navy_ww_ii",
+    "name": "E. Mann",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1880028,
+    "lng": -72.6296917,
+    "story": "E. Mann served in the U.S. Navy during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/mann__e_navy_ww_ii.jpg"
+  },
+  {
+    "id": "mann__h_l_inf_",
+    "name": "H.L. Mann",
+    "branch": "U.S. Infantry",
+    "branchLabel": "Infantry \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1873361,
+    "lng": -72.6276167,
+    "story": "H.L. Mann served in the U.S. Infantry during Unknown Era. Era not on stone. Near E. Mann KIA \u2014 likely family..",
+    "color": "#1a6abf",
+    "icon": "\u2605",
+    "photo": "photos/mann__h_l_inf_.jpg"
+  },
+  {
+    "id": "marion__e_army_ww_i",
+    "name": "E. Marion",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.18745,
+    "lng": -72.6273194,
+    "story": "E. Marion served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/marion__e_army_ww_i.jpg"
+  },
+  {
+    "id": "marrion__j_army",
+    "name": "J. Marrion",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1880917,
+    "lng": -72.6294778,
+    "story": "J. Marrion served in the U.S. Army during Unknown Era. Era not on stone..",
+    "color": "#1a6abf",
+    "icon": "\u2605",
+    "photo": "photos/marrion__j_army.jpg"
+  },
+  {
+    "id": "martin__t_uscg_ww_ii",
+    "name": "T. Martin",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "Coast Guard \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1876611,
+    "lng": -72.6288306,
+    "story": "T. Martin served in the U.S. Coast Guard during World War II. 143m from T. Martin Jr. \u2014 different family..",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/martin__t_uscg_ww_ii.jpg"
+  },
+  {
+    "id": "unknown_vet_mass_",
+    "name": "Unknown Vet Mass",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1891138888889,
+    "lng": -72.6284166666667,
+    "flags": [],
+    "photo": "photos/unknown_vet_mass_.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "mazzolini__a_usaf_korea",
+    "name": "A. Mazzolini",
+    "branch": "U.S. Air Force",
+    "branchLabel": "Air Force \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1878861,
+    "lng": -72.6287306,
+    "story": "A. Mazzolini served in the U.S. Air Force during Korea.",
+    "color": "#4a5240",
+    "icon": "\u2708",
+    "photo": "photos/mazzolini__a_usaf_korea.jpg"
+  },
+  {
+    "id": "mazzolini__e_usaaf_ww_ii",
+    "name": "E. Mazzolini",
+    "branch": "U.S. Army Air Forces",
+    "branchLabel": "USAAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1888472,
+    "lng": -72.6292583,
+    "story": "E. Mazzolini served in the United States Army Air Forces during World War II. The USAAF grew into the largest air force in history, flying strategic bombing missions over Europe and the Pacific. The Mazzolini family sent multiple members to serve during the war.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/mazzolini__e_usaaf_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mazzolini__j_army_ww_ii",
+    "name": "J. Mazzolini",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1882139,
+    "lng": -72.6286694,
+    "story": "J. Mazzolini served in the U.S. Army during World War II.",
+    "color": "#1a3a6b",
+    "icon": "\u2605",
+    "photo": "photos/mazzolini__j_army_ww_ii.jpg"
+  },
+  {
+    "id": "mcallister__g_army_ww_i",
+    "name": "G. McAllister",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.187675,
+    "lng": -72.6285028,
+    "story": "G. McAllister served in the U.S. Army during World War I.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mcallister__g_army_ww_i.jpg"
+  },
+  {
+    "id": "mccarthy__c_d_usnr_korea",
+    "name": "C.D. McCarthy",
+    "branch": "U.S. Naval Reserve",
+    "branchLabel": "USNR \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1889111,
+    "lng": -72.6293806,
+    "story": "C.D. McCarthy served in the United States Naval Reserve during the Korean War (1950\u20131953). The Naval Reserve supplemented active-duty forces throughout the conflict, serving on warships and at shore installations across the Pacific. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/mccarthy__c_d_usnr_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mccarthy__j_f_mass_inf_ww_ii",
+    "name": "J.F. McCarthy",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.18745,
+    "lng": -72.6271972,
+    "story": "J.F. McCarthy served in the Massachusetts Infantry during World War II. Massachusetts National Guard units served in multiple theaters of the war. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mccarthy__j_f_mass_inf_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcclean",
+    "name": "McClean",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC",
+    "era": "Unknown Era",
+    "lat": 42.18895,
+    "lng": -72.6287,
+    "story": "McClean served in the United States Marine Corps. Marines have answered America's call in every conflict since 1775 \u2014 from the halls of Montezuma to the shores of Tripoli. Further details about his era and service are being researched.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/mcclean.jpg"
+  },
+  {
+    "id": "mcclean_usmc",
+    "name": "McClean",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC",
+    "era": "Unknown Era",
+    "lat": 42.18895,
+    "lng": -72.6287,
+    "story": "McClean served in the United States Marine Corps. Marines have answered America's call in every conflict since 1775. Further details about their era and service are being researched.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/mcclean_usmc.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcconnell__j_army_ww_ii",
+    "name": "J. McConnell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1869167,
+    "lng": -72.6281444,
+    "story": "J. McConnell served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mcconnell__j_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mccormack",
+    "name": "E. McCormack",
+    "branch": "Massachusetts SATC",
+    "branchLabel": "MA SATC \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.18900277777777,
+    "lng": -72.6287,
+    "story": "E. McCormack served in the Massachusetts Student Army Training Corps (SATC) during World War I. The SATC was established in 1918 to train college-age men for rapid military service as the war demanded more and more soldiers. McCormack represents one of Calvary Cemetery's WWI-era veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mccormack.jpg"
+  },
+  {
+    "id": "mccormack__e_mass_satc",
+    "name": "E. McCormack",
+    "branch": "Massachusetts SATC",
+    "branchLabel": "MA SATC \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1890028,
+    "lng": -72.6287,
+    "story": "E. McCormack served in the Massachusetts Student Army Training Corps (SATC) during World War I. The SATC was established in 1918 to train college-age men for rapid military service as the war demanded more soldiers. McCormack represents one of Calvary Cemetery's WWI-era veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mccormack__e_mass_satc.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mccormack__g_mass_amb_div_ww_i_ss",
+    "name": "G. McCormack",
+    "branch": "Massachusetts Ambulance Division",
+    "branchLabel": "MA Amb. Div. \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1889806,
+    "lng": -72.6287167,
+    "flags": [
+      "Silver Star"
+    ],
+    "story": "G. McCormack served in the Massachusetts Ambulance Division during World War I and was awarded the Silver Star. Ambulance drivers operated under constant shellfire to evacuate the wounded \u2014 one of the most dangerous non-combat roles in the war. The Silver Star marks McCormack as a veteran of exceptional valor.",
+    "color": "#c8a000",
+    "icon": "\u2605",
+    "photo": "photos/mccormack__g_mass_amb_div_ww_i_ss.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcdonald__v_us_army_nurse_corp_ww_ii",
+    "name": "V. McDonald",
+    "branch": "Army Nurse Corps",
+    "branchLabel": "Army Nurse Corps \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1881167,
+    "lng": -72.6277472,
+    "flags": [
+      "Female Veteran"
+    ],
+    "story": "V. McDonald served in the Army Nurse Corps during World War II. Army nurses worked in field hospitals and evacuation units under fire, saving thousands of lives across every theater of the war. McDonald is one of the female veterans honored at Calvary Cemetery \u2014 her service deserves special recognition.",
+    "color": "#6a4a8a",
+    "icon": "\u271a",
+    "photo": "photos/mcdonald__v_us_army_nurse_corp_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcdonnell_army_ww_ii",
+    "name": "McDonnell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1869167,
+    "lng": -72.6281444,
+    "story": "McDonnell served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mcdonnell_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcginty__m_army_korea",
+    "name": "M. McGinty",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1882333,
+    "lng": -72.6297139,
+    "story": "M. McGinty served in the U.S. Army during the Korean War (1950\u20131953). Often called 'The Forgotten War,' the conflict cost over 36,000 American lives. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mcginty__m_army_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcguines__e_army_ww_ii",
+    "name": "E Mcguines",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.188781,
+    "lng": -72.629875,
+    "story": "E Mcguines served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/mcguines__e_army_ww_ii.jpg"
+  },
+  {
+    "id": "mckilltop_m__mckilltop_w_",
+    "name": "M. & W. McKilltop",
+    "branch": "U.S. Military",
+    "branchLabel": "Military \u00b7 Shared Stone",
+    "era": "Unknown Era",
+    "lat": 42.1883056,
+    "lng": -72.6292417,
+    "flags": [
+      "Shared Headstone"
+    ],
+    "story": "M. McKilltop and W. McKilltop share a headstone at Calvary Cemetery \u2014 two members of the same family who served their country. Shared veteran headstones often mark brothers or a father and son who both answered the call. Further details about their service are being researched.",
+    "color": "#888888",
+    "icon": "\u2605",
+    "photo": "photos/mckilltop_m__mckilltop_w_.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mckinstrie__j_army_ww_i",
+    "name": "J. McKinstrie",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1877528,
+    "lng": -72.6277917,
+    "story": "J. McKinstrie served in the U.S. Army during World War I. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mckinstrie__j_army_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mckissick__g_army_ww_ii",
+    "name": "G. McKissick",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874417,
+    "lng": -72.6280222,
+    "story": "G. McKissick served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mckissick__g_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcmahon__m_mass_mil_police_ww_i",
+    "name": "M. McMahon",
+    "branch": "Massachusetts Military Police",
+    "branchLabel": "MA Mil. Police \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1885389,
+    "lng": -72.6282361,
+    "story": "M. McMahon served in the Massachusetts Military Police during World War I. Military Police maintained order, guarded prisoners of war, and enforced discipline in both stateside camps and overseas \u2014 a vital role in managing the massive mobilization of the American Expeditionary Forces.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mcmahon__m_mass_mil_police_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcmullen__j_usn_ww_ii",
+    "name": "J. McMullen",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1881611,
+    "lng": -72.6286917,
+    "story": "J. McMullen served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/mcmullen__j_usn_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcnally__m_army_ww_i",
+    "name": "M. McNally",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1880694,
+    "lng": -72.6273639,
+    "story": "M. McNally served in the U.S. Army during World War I. Holyoke answered the call when America entered the Great War in 1917, and McNally was among those who served. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mcnally__m_army_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mcnulty__e_ordinance_co_ww_i",
+    "name": "E. McNulty",
+    "branch": "Ordnance Company",
+    "branchLabel": "Ordnance Co. \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1875639,
+    "lng": -72.6271139,
+    "story": "E. McNulty served in an Ordnance Company during World War I. Ordnance troops were the backbone of the Army's supply chain \u2014 responsible for maintaining weapons, managing ammunition depots, and keeping front-line soldiers equipped under fire. Their work was essential to every Allied advance.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/mcnulty__e_ordinance_co_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "horrigan_a_j_md_pioneer_radiologist",
+    "name": "A.J. Horrigan MD",
+    "branch": "Medical Corps / Pioneer Radiologist",
+    "branchLabel": "Medical Corps / Pioneer Radiologist \u00b7 Era Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1886833,
+    "lng": -72.6299139,
+    "story": "A.J. Horrigan MD served in the Medical Corps / Pioneer Radiologist during Unknown Era. Pioneer Radiologist.",
+    "color": "#1a6abf",
+    "icon": "\u271a",
+    "photo": "photos/horrigan_a_j_md_pioneer_radiologist.jpg"
+  },
+  {
+    "id": "horrigan_a_j_md_pioneer_",
+    "name": "A.J. Horrigan, MD",
+    "branch": "Medical Corps / Pioneer Radiologist",
+    "branchLabel": "Radiologist",
+    "era": "Pre-WWI / Early 20th Century",
+    "lat": 42.188683,
+    "lng": -72.629914,
+    "story": "Dr. A.J. Horrigan was a pioneering radiologist in Holyoke, MA and an early champion of X-ray technology in medicine. His dedication to his patients and community left a lasting legacy in the region.",
+    "color": "#8b4513",
+    "icon": "\u271a",
+    "photo": "photos/horrigan_a_j_md_pioneer_radiologist.jpg"
+  },
+  {
+    "id": "meehan_",
+    "name": "Meehan",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.1886028,
+    "lng": -72.6292722,
+    "story": "Meehan served in the U.S. Military. Further details about their branch and era of service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2605",
+    "photo": "photos/meehan_.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "mercier__n_army_korea",
+    "name": "N. Mercier",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1880722,
+    "lng": -72.6286861,
+    "story": "N. Mercier served in the U.S. Army during the Korean War. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/mercier__n_army_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "meunier",
+    "name": "R. Meunier",
+    "branch": "U.S. Navy",
+    "branchLabel": "U.S. Navy",
+    "era": "Korean War",
+    "lat": 42.18859444444444,
+    "lng": -72.62918055555555,
+    "story": "R. Meunier served in the United States Navy during the Korean War (1950\u20131953). The Navy provided critical gunfire support, supply lines, and air operations throughout the conflict. Further details about his service are being researched.",
+    "color": "#1a3a8a",
+    "icon": "\u2693",
+    "photo": "photos/meunier.jpg"
+  },
+  {
+    "id": "meunier__r_navy_korea",
+    "name": "R. Meunier",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1885944,
+    "lng": -72.6291806,
+    "story": "R. Meunier served in the United States Navy during the Korean War (1950\u20131953). The Navy provided critical gunfire support, supply lines, and carrier air operations throughout the conflict. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/meunier__r_navy_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "miano__f_usn_ww_ii",
+    "name": "F. Miano",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1869306,
+    "lng": -72.6281194,
+    "story": "F. Miano served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/miano__f_usn_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "miller__c_navy_ww_ii",
+    "name": "C. Miller",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1888694,
+    "lng": -72.6294028,
+    "story": "C. Miller served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/miller__c_navy_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moat__r_army_korea",
+    "name": "R. Moat",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.187775,
+    "lng": -72.6289889,
+    "story": "R. Moat served in the U.S. Army during the Korean War (1950\u20131953). Often called 'The Forgotten War,' the conflict on the Korean Peninsula cost over 36,000 American lives. Further details about their service are being researched.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/moat__r_army_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moore__e_md_army_navy_ww_ii_korea",
+    "name": "Dr. E. Moore",
+    "branch": "Army / Navy Medical Corps",
+    "branchLabel": "Medical Corps \u00b7 WWII & Korea",
+    "era": "World War II",
+    "lat": 42.1888806,
+    "lng": -72.6284944,
+    "flags": [
+      "Medical Officer"
+    ],
+    "story": "Dr. E. Moore served as a medical officer in both the Army and Navy during World War II and the Korean War \u2014 a rare double-era veteran. Military physicians worked under extraordinary conditions, treating battlefield wounds, disease, and trauma across two major conflicts. Moore's service across both eras reflects exceptional dedication.",
+    "color": "#8b4513",
+    "icon": "\u271a",
+    "photo": "photos/moore__e_md_army_navy_ww_ii_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moran__c_navy_ww_ii",
+    "name": "C. Moran",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871833,
+    "lng": -72.6272056,
+    "story": "C. Moran served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/moran__c_navy_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "morgan__j_usaf_ww_ii",
+    "name": "J. Morgan",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1885028,
+    "lng": -72.6293556,
+    "story": "J. Morgan served in the United States Air Force during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/morgan__j_usaf_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "morgan__j_uscg_ww_ii",
+    "name": "J. Morgan",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "USCG \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871111,
+    "lng": -72.6273333,
+    "story": "J. Morgan served in the United States Coast Guard during World War II. The Coast Guard's wartime missions included landing troops on enemy beaches, rescuing downed airmen, and escorting convoys across the Atlantic under constant U-boat threat \u2014 roles often overlooked in the history of the war.",
+    "color": "#d4900a",
+    "icon": "\u2693",
+    "photo": "photos/morgan__j_uscg_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moriarty__a_army_ww_ii",
+    "name": "A. Moriarty",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1889222,
+    "lng": -72.6286861,
+    "story": "A. Moriarty served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/moriarty__a_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moriarty__e_j_navy_ww_ii",
+    "name": "E.J. Moriarty",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1881417,
+    "lng": -72.6292639,
+    "story": "E.J. Moriarty served in the United States Navy during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/moriarty__e_j_navy_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moriarty__j_f_mass_arty_ww_i",
+    "name": "J.F. Moriarty",
+    "branch": "Massachusetts Artillery",
+    "branchLabel": "MA Artillery \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1887694,
+    "lng": -72.6291417,
+    "story": "J.F. Moriarty served in the Massachusetts Artillery during World War I. Artillery units endured some of the most brutal conditions of the Western Front, providing fire support under constant counter-battery threat. Moriarty represents Holyoke's contribution to the Great War.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/moriarty__j_f_mass_arty_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moriarty__j_j_inf",
+    "name": "J.J. Moriarty",
+    "branch": "U.S. Infantry",
+    "branchLabel": "U.S. Infantry",
+    "era": "Unknown Era",
+    "lat": 42.1887056,
+    "lng": -72.6294556,
+    "story": "J.J. Moriarty served in the United States Infantry. Further details about their era and service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/moriarty__j_j_inf.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moriarty__w_army_ww_ii",
+    "name": "W. Moriarty",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1892972,
+    "lng": -72.6289056,
+    "story": "W. Moriarty served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/moriarty__w_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moroni__a_army_ww_ii",
+    "name": "A. Moroni",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1871806,
+    "lng": -72.6274111,
+    "story": "A. Moroni served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/moroni__a_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "morrison__f_mass_inf_ww_i",
+    "name": "F. Morrison",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1888556,
+    "lng": -72.6289222,
+    "story": "F. Morrison served in the Massachusetts Infantry during World War I. Massachusetts National Guard units were among the first American forces mobilized when the U.S. entered the war in 1917. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/morrison__f_mass_inf_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "morrison__j_a_army_ww_ii",
+    "name": "J.A. Morrison",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1888167,
+    "lng": -72.6288833,
+    "story": "J.A. Morrison served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/morrison__j_a_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "moynahan__t_army__ww_ii",
+    "name": "T Moynahan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.189914,
+    "lng": -72.629456,
+    "story": "T Moynahan served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2b50",
+    "photo": "photos/moynahan__t_army__ww_ii.jpg"
+  },
+  {
+    "id": "moynahan",
+    "name": "T. Moynahan",
+    "branch": "U.S. Army",
+    "branchLabel": "U.S. Army",
+    "era": "World War II",
+    "lat": 42.18991388888889,
+    "lng": -72.62945555555555,
+    "story": "T. Moynahan served in the United States Army during World War II. Further details about his service are being researched.",
+    "color": "#5a7a30",
+    "icon": "\u2605",
+    "photo": "photos/moynahan.jpg"
+  },
+  {
+    "id": "murray__r_army_ww_ii",
+    "name": "R. Murray",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1886944,
+    "lng": -72.6282889,
+    "story": "R. Murray served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/murray__r_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "murray__w_mass_inf",
+    "name": "W. Murray",
+    "branch": "Massachusetts Infantry",
+    "branchLabel": "MA Infantry",
+    "era": "Civil War Era",
+    "lat": 42.1890722,
+    "lng": -72.6283556,
+    "story": "W. Murray served in the Massachusetts Infantry, almost certainly during the Civil War (1861\u20131865). Massachusetts regiments fought throughout the Eastern Theater, from Bull Run to Appomattox. Murray represents one of Calvary Cemetery's oldest veteran burials.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/murray__w_mass_inf.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "musante__a_usnrf_ww_i",
+    "name": "A. Musante",
+    "branch": "U.S. Naval Reserve Force",
+    "branchLabel": "USNRF \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1881611,
+    "lng": -72.6276556,
+    "story": "A. Musante served in the United States Naval Reserve Force during World War I. The USNRF played a vital role in protecting Atlantic shipping lanes from German U-boats \u2014 one of the most critical missions of the war. Musante is among Calvary Cemetery's WWI naval veterans.",
+    "color": "#6a4a8a",
+    "icon": "\u2693",
+    "photo": "photos/musante__a_usnrf_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "nagle__r_usmc_ww_ii",
+    "name": "R Nagle",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "Corps",
+    "era": "World War II",
+    "lat": 42.189319,
+    "lng": -72.629531,
+    "story": "R Nagle served in the U.S. Marine Corps during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#8b0000",
+    "icon": "\u2693",
+    "photo": "photos/nagle__r_usmc_ww_ii.jpg"
+  },
+  {
+    "id": "nagle",
+    "name": "R. Nagle",
+    "branch": "U.S. Marine Corps",
+    "branchLabel": "USMC",
+    "era": "World War II",
+    "lat": 42.18931944444444,
+    "lng": -72.62953055555555,
+    "story": "R. Nagle served in the United States Marine Corps during World War II. Marines bore some of the fiercest fighting of the Pacific War. Further details about his service are being researched.",
+    "color": "#bf2020",
+    "icon": "\u2693",
+    "photo": "photos/nagle.jpg"
+  },
+  {
+    "id": "neary__j_usn_ww_ii",
+    "name": "J. Neary",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1874972,
+    "lng": -72.6279528,
+    "story": "J. Neary served in the United States Navy during World War II. The Navy fought across two oceans \u2014 from Atlantic convoy escort duty to the island-hopping campaigns of the Pacific. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/neary__j_usn_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "retake_needed",
+    "name": "Retake Needed",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.188575,
+    "lng": -72.6288611,
+    "flags": [
+      "Retake Needed"
+    ],
+    "photo": "photos/retake_needed.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "niemiec__l_army_air_corps_ww_ii",
+    "name": "L. Niemiec",
+    "branch": "Army Air Corps",
+    "branchLabel": "USAAC \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.18735,
+    "lng": -72.6271444,
+    "story": "L. Niemiec served in the United States Army Air Corps during World War II. The USAAC flew strategic bombing missions over Europe and the Pacific, and its members were among the most highly trained aviators in American history. Further details about their service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/niemiec__l_army_air_corps_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "noffke__w_usnr_ww_ii",
+    "name": "W. Noffke",
+    "branch": "U.S. Naval Reserve",
+    "branchLabel": "USNR \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.1869556,
+    "lng": -72.6283556,
+    "story": "W. Noffke served in the United States Naval Reserve during World War II. The USNR supplemented the active Navy with trained personnel who mobilized rapidly after Pearl Harbor, serving on warships, in aviation, and at shore installations across both oceans. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/noffke__w_usnr_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "noland__e_usaf_vietnam",
+    "name": "E. Noland",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF \u00b7 Vietnam",
+    "era": "Vietnam",
+    "lat": 42.1875444,
+    "lng": -72.627075,
+    "story": "E. Noland served in the United States Air Force during the Vietnam War. USAF missions ranged from strategic bombing campaigns to close air support and search-and-rescue operations over Southeast Asia. Further details about their service are being researched.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/noland__e_usaf_vietnam.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "noonan__j_army_ww_i",
+    "name": "J. Noonan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.18935,
+    "lng": -72.6295472,
+    "story": "J. Noonan served in the U.S. Army during World War I. Holyoke sent many of its sons to the Great War, and Noonan was among them \u2014 answering the call when America entered the conflict in 1917. Further details about their service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/noonan__j_army_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "norton__r_army_ww_i_",
+    "name": "R. Norton",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1881972,
+    "lng": -72.629425,
+    "story": "R. Norton served in the U.S. Army during World War I (1917\u20131918). American doughboys arrived on the Western Front and helped turn the tide of a war that had ground Europe to a standstill for four years. Further details about Norton's service are being researched.",
+    "color": "#6a4a8a",
+    "icon": "\u2605",
+    "photo": "photos/norton__r_army_ww_i_.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_brien__m_army_nurse_corps_ww_i",
+    "name": "M. O'Brien",
+    "branch": "Army Nurse Corps",
+    "branchLabel": "Army Nurse Corps \u00b7 WWI",
+    "era": "World War I",
+    "lat": 42.1878972,
+    "lng": -72.6287222,
+    "flags": [
+      "Female Veteran"
+    ],
+    "story": "M. O'Brien served in the Army Nurse Corps during World War I. The nurses of WWI worked under extraordinarily dangerous conditions \u2014 treating gas casualties, shell shock, and wounds from industrial-scale warfare. O'Brien is one of the rare female veterans honored at Calvary Cemetery, and her service deserves special recognition.",
+    "color": "#6a4a8a",
+    "icon": "\u271a",
+    "photo": "photos/o_brien__m_army_nurse_corps_ww_i.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_connell__t_usaf_korea",
+    "name": "T. O'Connell",
+    "branch": "U.S. Air Force",
+    "branchLabel": "USAF \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1876944,
+    "lng": -72.62835,
+    "story": "T. O'Connell served in the United States Air Force during the Korean War (1950\u20131953). USAF airmen flew combat missions over the Korean Peninsula and provided close air support that was critical to ground operations. Further details about their service are being researched.",
+    "color": "#1a6abf",
+    "icon": "\u2708",
+    "photo": "photos/o_connell__t_usaf_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_connor__e_navy_korea",
+    "name": "E. O'Connor",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy \u00b7 Korea",
+    "era": "Korean War",
+    "lat": 42.1878,
+    "lng": -72.6294,
+    "story": "E. O'Connor served in the United States Navy during the Korean War (1950\u20131953). The Navy provided critical gunfire support, supply lines, and carrier air operations throughout the conflict. Further details about their service are being researched.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/o_connor__e_navy_korea.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_connor__g_army_ww_ii",
+    "name": "G. O'Connor",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1880083,
+    "lng": -72.6291194,
+    "story": "G. O'Connor served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/o_connor__g_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_connor",
+    "name": "O'Connor",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.189803,
+    "lng": -72.629294,
+    "story": "O'Connor served in the U.S. Military during Unknown Era. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2b50",
+    "photo": "photos/o_connor.jpg"
+  },
+  {
+    "id": "o_donnell__m_army_ww_ii",
+    "name": "M. O'Donnell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1871139,
+    "lng": -72.6273944,
+    "story": "M. O'Donnell served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/o_donnell__m_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_donnell__t_army_ww_ii",
+    "name": "T. O'Donnell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1888667,
+    "lng": -72.6291278,
+    "story": "T. O'Donnell served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/o_donnell__t_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_donnell__w_p_army_wwii",
+    "name": "W.P. O'Donnell",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1881917,
+    "lng": -72.6296778,
+    "story": "W.P. O'Donnell served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/o_donnell__w_p_army_wwii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "o_rourke",
+    "name": "O'Rourke",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "Unknown Era",
+    "lat": 42.189592,
+    "lng": -72.629325,
+    "story": "O'Rourke served in the U.S. Military during Unknown Era. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2b50",
+    "photo": "photos/o_rourke.jpg"
+  },
+  {
+    "id": "orourke",
+    "name": "O'Rourke",
+    "branch": "U.S. Military",
+    "branchLabel": "U.S. Military",
+    "era": "Unknown Era",
+    "lat": 42.189591666666665,
+    "lng": -72.629325,
+    "story": "O'Rourke served in the U.S. military. Further details about branch and era of service are being researched.",
+    "color": "#5a5a5a",
+    "icon": "\u2605",
+    "photo": "photos/orourke.jpg"
+  },
+  {
+    "id": "o_sullivan__j_army_ww_ii",
+    "name": "J. O'Sullivan",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.187225,
+    "lng": -72.6273417,
+    "story": "J. O'Sullivan served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/o_sullivan__j_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "oahill__w__us_inf",
+    "name": "W. Oahill",
+    "branch": "U.S. Infantry",
+    "branchLabel": "U.S. Infantry",
+    "era": "Unknown Era",
+    "lat": 42.1885556,
+    "lng": -72.62815,
+    "story": "W. Oahill served in the United States Infantry. Further details about their era and service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/oahill__w__us_inf.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "oanavan__j__2_mass_inf",
+    "name": "J. Oanavan",
+    "branch": "2nd Massachusetts Infantry",
+    "branchLabel": "2nd MA Infantry",
+    "era": "Civil War Era",
+    "lat": 42.187775,
+    "lng": -72.6293722,
+    "story": "J. Oanavan served in the 2nd Massachusetts Infantry, almost certainly during the Civil War (1861\u20131865). The 2nd Massachusetts Infantry fought with distinction in some of the war's most pivotal engagements. Oanavan represents one of Calvary Cemetery's oldest veteran burials.",
+    "color": "#8a4a1a",
+    "icon": "\u2605",
+    "photo": "photos/oanavan__j__2_mass_inf.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "olaffey__f_navy_",
+    "name": "F. Olaffey",
+    "branch": "U.S. Navy",
+    "branchLabel": "Navy",
+    "era": "Unknown Era",
+    "lat": 42.1872056,
+    "lng": -72.6282056,
+    "story": "F. Olaffey served in the United States Navy. Further details about their era and service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#1a3a6b",
+    "icon": "\u2693",
+    "photo": "photos/olaffey__f_navy_.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "orsini_ww_ii",
+    "name": "Orsini",
+    "branch": "U.S. Military",
+    "branchLabel": "Military",
+    "era": "World War II",
+    "lat": 42.189833,
+    "lng": -72.629264,
+    "story": "Orsini served in the U.S. Military during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#888888",
+    "icon": "\u2b50",
+    "photo": "photos/orsini_ww_ii.jpg"
+  },
+  {
+    "id": "ostek__f_army_ww_ii",
+    "name": "F. Ostek",
+    "branch": "U.S. Army",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1870111,
+    "lng": -72.6282417,
+    "story": "F. Ostek served in the U.S. Army during World War II. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#4a5240",
+    "icon": "\u2605",
+    "photo": "photos/ostek__f_army_ww_ii.jpg",
+    "source": "session8"
+  },
+  {
+    "id": "owen",
+    "name": "Owen",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1868222,
+    "lng": -72.6277472,
+    "flags": [],
+    "photo": "photos/owen.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "patrick__r_army_vietnam",
+    "name": "R. Patrick",
+    "branchLabel": "Army",
+    "era": "Vietnam",
+    "lat": 42.1873778,
+    "lng": -72.6270361,
+    "flags": [],
+    "photo": "photos/patrick__r_army_vietnam.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "phelan__w_army_ww_ii",
+    "name": "W. Phelan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1880278,
+    "lng": -72.6282361,
+    "flags": [
+      "Purple Heart"
+    ],
+    "photo": "photos/phelan__w_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "polverini",
+    "name": "E. Polverini",
+    "branch": "U.S. Army",
+    "branchLabel": "U.S. Army",
+    "era": "World War II",
+    "lat": 42.18858611111111,
+    "lng": -72.62870833333332,
+    "story": "E. Polverini served in the United States Army during World War II. Further details about his service are being researched.",
+    "color": "#5a7a30",
+    "icon": "\u2605",
+    "photo": "photos/polverini.jpg"
+  },
+  {
+    "id": "polverini__e_army_ww_ii",
+    "name": "E. Polverini",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1885861,
+    "lng": -72.6287083,
+    "flags": [],
+    "photo": "photos/polverini__e_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "prout__j_usmc_ww_ii",
+    "name": "J. Prout",
+    "branchLabel": "USMC",
+    "era": "World War II",
+    "lat": 42.1871639,
+    "lng": -72.6273028,
+    "flags": [],
+    "photo": "photos/prout__j_usmc_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "provost__l_navy_ww_ii",
+    "name": "L. Provost",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1888,
+    "lng": -72.6294028,
+    "flags": [],
+    "photo": "photos/provost__l_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "quinn__j_navy_ww_ii",
+    "name": "J. Quinn",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1890972,
+    "lng": -72.6286083,
+    "flags": [],
+    "photo": "photos/quinn__j_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "quinn",
+    "name": "Quinn",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1871222,
+    "lng": -72.6278083,
+    "flags": [],
+    "photo": "photos/quinn.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "raidy",
+    "name": "Raidy",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1880306,
+    "lng": -72.62745,
+    "flags": [],
+    "photo": "photos/raidy.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "regan__j_army_ww_i",
+    "name": "J. Regan",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.186925,
+    "lng": -72.6274944,
+    "flags": [],
+    "photo": "photos/regan__j_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "retake_",
+    "name": "Retake",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1885861,
+    "lng": -72.6281667,
+    "flags": [
+      "Retake Needed"
+    ],
+    "photo": "photos/retake_.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "riley__army_navy_spanish_war",
+    "name": "ARMY. Riley",
+    "branchLabel": "Army",
+    "era": "Spanish-American War",
+    "lat": 42.1873056,
+    "lng": -72.6271222,
+    "flags": [],
+    "photo": "photos/riley__army_navy_spanish_war.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "robindoux__a_army_ww_ii",
+    "name": "A. Robindoux",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1870278,
+    "lng": -72.6272139,
+    "flags": [],
+    "photo": "photos/robindoux__a_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rogers__j_b_army_ww_ii",
+    "name": "J. Rogers",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1896778,
+    "lng": -72.6295083,
+    "flags": [],
+    "photo": "photos/rogers__j_b_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rogers",
+    "name": "J.B. Rogers",
+    "branch": "U.S. Army",
+    "branchLabel": "U.S. Army",
+    "era": "World War II",
+    "lat": 42.189677777777774,
+    "lng": -72.62950833333333,
+    "story": "J.B. Rogers served in the United States Army during World War II. Further details about his service are being researched.",
+    "color": "#5a7a30",
+    "icon": "\u2605",
+    "photo": "photos/rogers.jpg"
+  },
+  {
+    "id": "rohan__f_army_ww_ii",
+    "name": "F. Rohan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1889,
+    "lng": -72.6290056,
+    "flags": [],
+    "photo": "photos/rohan__f_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rohan__t_usaaf_ww_ii",
+    "name": "T. Rohan",
+    "branchLabel": "USAAF",
+    "era": "World War II",
+    "lat": 42.1888861,
+    "lng": -72.6289972,
+    "flags": [],
+    "photo": "photos/rohan__t_usaaf_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rosado__m_army_korea",
+    "name": "M. Rosado",
+    "branchLabel": "Army",
+    "era": "Korean War",
+    "lat": 42.189225,
+    "lng": -72.6286778,
+    "flags": [],
+    "photo": "photos/rosado__m_army_korea.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "ross__m_usmc",
+    "name": "M. Ross",
+    "branchLabel": "USMC",
+    "era": "Unknown Era",
+    "lat": 42.1879,
+    "lng": -72.6281278,
+    "flags": [],
+    "photo": "photos/ross__m_usmc.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rothus__f_army_vietnam",
+    "name": "F. Rothus",
+    "branchLabel": "Army",
+    "era": "Vietnam",
+    "lat": 42.1879472,
+    "lng": -72.6295778,
+    "flags": [],
+    "photo": "photos/rothus__f_army_vietnam.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "rothus__j_army_ww_ii",
+    "name": "J. Rothus",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1878694,
+    "lng": -72.6295611,
+    "flags": [],
+    "photo": "photos/rothus__j_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "ruell__j_jr_army_ww_ii",
+    "name": "J. Ruell",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.187375,
+    "lng": -72.6271528,
+    "flags": [],
+    "photo": "photos/ruell__j_jr_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "salesky__g_army_ww_i",
+    "name": "G. Salesky",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1875306,
+    "lng": -72.6271222,
+    "flags": [],
+    "photo": "photos/salesky__g_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "scalon__m_army_ww_i",
+    "name": "M. Scalon",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1892917,
+    "lng": -72.6289,
+    "flags": [],
+    "photo": "photos/scalon__m_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "scully__a_p_usn_ww_ii",
+    "name": "A. Scully",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1875139,
+    "lng": -72.6285778,
+    "flags": [],
+    "photo": "photos/scully__a_p_usn_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "senecal__e_army",
+    "name": "E. Senecal",
+    "branchLabel": "Army",
+    "era": "Unknown Era",
+    "lat": 42.1875694,
+    "lng": -72.6281194,
+    "flags": [],
+    "photo": "photos/senecal__e_army.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "senecal__l_army_ww_ii",
+    "name": "L. Senecal",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1869361,
+    "lng": -72.6275722,
+    "flags": [],
+    "photo": "photos/senecal__l_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "serey__e_army_ww_ii",
+    "name": "E. Serey",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1888056,
+    "lng": -72.6283944,
+    "flags": [],
+    "photo": "photos/serey__e_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "shea__a_army_ww_ii",
+    "name": "A. Shea",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1877556,
+    "lng": -72.6278,
+    "flags": [],
+    "photo": "photos/shea__a_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "shea__d_g_army_ww_ii",
+    "name": "D. Shea",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1887778,
+    "lng": -72.6296306,
+    "flags": [],
+    "photo": "photos/shea__d_g_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "shea__e_b_navy_ww_i",
+    "name": "E. Shea",
+    "branchLabel": "Navy",
+    "era": "World War I",
+    "lat": 42.1888111,
+    "lng": -72.6296306,
+    "flags": [],
+    "photo": "photos/shea__e_b_navy_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "shea__g_army_ww_ii",
+    "name": "G. Shea",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1888667,
+    "lng": -72.6296472,
+    "flags": [],
+    "photo": "photos/shea__g_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheard__a_jr_navy_wwii",
+    "name": "A. Sheard",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1882444,
+    "lng": -72.6296528,
+    "flags": [],
+    "photo": "photos/sheard__a_jr_navy_wwii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheard__w_inf_ww_ii",
+    "name": "W. Sheard",
+    "branchLabel": "Unknown",
+    "era": "World War II",
+    "lat": 42.1870611,
+    "lng": -72.6279528,
+    "flags": [],
+    "photo": "photos/sheard__w_inf_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheehan",
+    "name": "F. Sheehan",
+    "branch": "U.S. Navy",
+    "branchLabel": "U.S. Navy",
+    "era": "World War II",
+    "lat": 42.18956111111111,
+    "lng": -72.62896666666666,
+    "story": "F. Sheehan served in the United States Navy during World War II. Further details about his service are being researched.",
+    "color": "#1a3a8a",
+    "icon": "\u2693",
+    "photo": "photos/sheehan.jpg"
+  },
+  {
+    "id": "sheehan__f__navy_ww_ii",
+    "name": "F. Sheehan",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1895611,
+    "lng": -72.6289667,
+    "flags": [],
+    "photo": "photos/sheehan__f__navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheehan__j_mass_brig",
+    "name": "J. Sheehan",
+    "branchLabel": "Unknown",
+    "era": "Civil War Era",
+    "lat": 42.1881333,
+    "lng": -72.629775,
+    "flags": [],
+    "photo": "photos/sheehan__j_mass_brig.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheehan__r_uscg_ww_ii",
+    "name": "R. Sheehan",
+    "branchLabel": "USCG",
+    "era": "World War II",
+    "lat": 42.1894639,
+    "lng": -72.6293111,
+    "flags": [],
+    "photo": "photos/sheehan__r_uscg_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sheehan__t_army_ww_ii",
+    "name": "T. Sheehan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1876028,
+    "lng": -72.6272889,
+    "flags": [],
+    "photo": "photos/sheehan__t_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "smith__v_ww_ii",
+    "name": "V. Smith",
+    "branchLabel": "Unknown",
+    "era": "World War II",
+    "lat": 42.1882139,
+    "lng": -72.6296611,
+    "flags": [],
+    "photo": "photos/smith__v_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "snyder__j_army_ww_i",
+    "name": "J. Snyder",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1876917,
+    "lng": -72.6278611,
+    "flags": [],
+    "photo": "photos/snyder__j_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "forrest__t_sr_army_ww_ii",
+    "name": "T. Forrest Sr.",
+    "branch": "U.S. Army",
+    "branchLabel": "Army \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.187275,
+    "lng": -72.627175,
+    "story": "T. Forrest Sr.",
+    "photo": "photos/forrest__t_sr_army_ww_ii.jpg"
+  },
+  {
+    "id": "stackpole__l_army_ww_ii",
+    "name": "L. Stackpole",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1883889,
+    "lng": -72.6281194,
+    "flags": [],
+    "photo": "photos/stackpole__l_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stapleton__r_army_ww_ii",
+    "name": "R. Stapleton",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1884806,
+    "lng": -72.6292806,
+    "flags": [],
+    "photo": "photos/stapleton__r_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stapleton__t_jr_usaaf_ww_ii",
+    "name": "T. Stapleton",
+    "branchLabel": "USAAF",
+    "era": "World War II",
+    "lat": 42.1885,
+    "lng": -72.6292806,
+    "flags": [],
+    "photo": "photos/stapleton__t_jr_usaaf_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stebbins__l_jr_navy",
+    "name": "L. Stebbins",
+    "branchLabel": "Navy",
+    "era": "Unknown Era",
+    "lat": 42.1872111,
+    "lng": -72.6283639,
+    "flags": [],
+    "photo": "photos/stebbins__l_jr_navy.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stevens__f_navy_ww_ii",
+    "name": "F. Stevens",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.187125,
+    "lng": -72.6273583,
+    "flags": [],
+    "photo": "photos/stevens__f_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stewart__w_army_ww_ii",
+    "name": "W. Stewart",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1880139,
+    "lng": -72.6297611,
+    "flags": [],
+    "photo": "photos/stewart__w_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "stone",
+    "name": "R. Stone",
+    "branch": "U.S. Coast Guard",
+    "branchLabel": "USCG",
+    "era": "World War II",
+    "lat": 42.18855,
+    "lng": -72.62895833333333,
+    "story": "R. Stone served in the United States Coast Guard during World War II. The Coast Guard's wartime role is often overlooked \u2014 its members rescued downed airmen, landed troops on enemy beaches, and escorted convoys across the Atlantic under constant threat of U-boat attack.",
+    "color": "#d4900a",
+    "icon": "\u2693",
+    "photo": "photos/stone.jpg"
+  },
+  {
+    "id": "stone__r_uscg_ww_ii",
+    "name": "R. Stone",
+    "branchLabel": "USCG",
+    "era": "World War II",
+    "lat": 42.18855,
+    "lng": -72.6289583,
+    "flags": [],
+    "photo": "photos/stone__r_uscg_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "storey__w_navy_ww_ii",
+    "name": "W. Storey",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1877361,
+    "lng": -72.6271056,
+    "flags": [],
+    "photo": "photos/storey__w_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sugrue__j_jr_army_ww_ii",
+    "name": "J. Sugrue",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1872833,
+    "lng": -72.6279361,
+    "flags": [],
+    "photo": "photos/sugrue__j_jr_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sugrue__r_army_ww_ii",
+    "name": "R. Sugrue",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1877639,
+    "lng": -72.6279,
+    "flags": [],
+    "photo": "photos/sugrue__r_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__h_inf_ww_i_kia",
+    "name": "H. Sullivan",
+    "branchLabel": "Unknown",
+    "era": "World War I",
+    "lat": 42.1877778,
+    "lng": -72.6289667,
+    "flags": [
+      "KIA"
+    ],
+    "photo": "photos/sullivan__h_inf_ww_i_kia.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__h_p_army_ww_ii",
+    "name": "H. Sullivan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1880083,
+    "lng": -72.6297611,
+    "flags": [],
+    "photo": "photos/sullivan__h_p_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__j_f_army_ww_ii",
+    "name": "J. Sullivan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1888583,
+    "lng": -72.6286556,
+    "flags": [],
+    "photo": "photos/sullivan__j_f_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__l_m_army_nurse_corps_ww_ii",
+    "name": "L. Sullivan",
+    "branchLabel": "Army Nurse Corps",
+    "era": "World War II",
+    "lat": 42.1882528,
+    "lng": -72.6293639,
+    "flags": [
+      "Female Veteran"
+    ],
+    "photo": "photos/sullivan__l_m_army_nurse_corps_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__w_d_army_wwii",
+    "name": "W. Sullivan",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1879278,
+    "lng": -72.6293556,
+    "flags": [],
+    "photo": "photos/sullivan__w_d_army_wwii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "sullivan__ww_i",
+    "name": "WW. Sullivan",
+    "branchLabel": "Unknown",
+    "era": "World War I",
+    "lat": 42.1877777777778,
+    "lng": -72.6289666666667,
+    "flags": [],
+    "photo": "photos/sullivan__ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "swords__r_usn_ww_ii",
+    "name": "R. Swords",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1883888888889,
+    "lng": -72.6291111111111,
+    "flags": [],
+    "photo": "photos/swords__r_usn_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "tanguay__o_army_ww_ii",
+    "name": "O. Tanguay",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1872333333333,
+    "lng": -72.6271888888889,
+    "flags": [],
+    "photo": "photos/tanguay__o_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "tauscher__o_army_ww_i",
+    "name": "O. Tauscher",
+    "branch": "Army",
+    "era": "World War I",
+    "lat": 42.1876666666667,
+    "lng": -72.6269694444444,
+    "photo": "photos/tauscher__o_army_ww_i.jpg",
+    "notes": ""
+  },
+  {
+    "id": "tessier__j_navy_ww_ii",
+    "name": "J. Tessier",
+    "branchLabel": "Navy",
+    "era": "World War II",
+    "lat": 42.1867861111111,
+    "lng": -72.6274111111111,
+    "flags": [],
+    "photo": "photos/tessier__j_navy_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "thibodeau__a_army_ww_ii",
+    "name": "A. Thibodeau",
+    "branch": "Army",
+    "era": "World War II",
+    "lat": 42.1877472222222,
+    "lng": -72.6284722222222,
+    "photo": "photos/thibodeau__a_army_ww_ii.jpg",
+    "notes": ""
+  },
+  {
+    "id": "thibodeau__d_mass_inf_ww_ii",
+    "name": "D. Thibodeau",
+    "branchLabel": "Mass. Infantry",
+    "era": "World War II",
+    "lat": 42.1875611111111,
+    "lng": -72.6285555555556,
+    "flags": [],
+    "photo": "photos/thibodeau__d_mass_inf_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "thorpe__w_mass_infantry",
+    "name": "W. Thorpe",
+    "branch": "Army",
+    "era": "World War I",
+    "lat": 42.1875611111111,
+    "lng": -72.6270972222222,
+    "photo": "photos/thorpe__w_mass_infantry.jpg",
+    "notes": "Mass. Infantry"
+  },
+  {
+    "id": "tobin__f_army_wwii",
+    "name": "F. Tobin",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1878472,
+    "lng": -72.6296,
+    "flags": [],
+    "photo": "photos/tobin__f_army_wwii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "tondryk__j_army_ww_ii",
+    "name": "J. Tondryk",
+    "branch": "Army",
+    "era": "World War II",
+    "lat": 42.1877277777778,
+    "lng": -72.6280527777778,
+    "photo": "photos/tondryk__j_army_ww_ii.jpg",
+    "notes": ""
+  },
+  {
+    "id": "tourigny__f_j_army",
+    "name": "F. Tourigny",
+    "branchLabel": "Army",
+    "era": "Unknown Era",
+    "lat": 42.1879527777778,
+    "lng": -72.6296916666667,
+    "flags": [],
+    "photo": "photos/tourigny__f_j_army.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "twohig__j_army",
+    "name": "J. Twohig",
+    "branch": "Army",
+    "era": "Unknown Era",
+    "lat": 42.1886972222222,
+    "lng": -72.6290805555556,
+    "photo": "photos/twohig__j_army.jpg",
+    "notes": ""
+  },
+  {
+    "id": "verrow__c_mass_ordinance",
+    "name": "C. Verrow",
+    "branch": "Army",
+    "era": "World War II",
+    "lat": 42.1886972222222,
+    "lng": -72.6283861111111,
+    "photo": "photos/verrow__c_mass_ordinance.jpg",
+    "notes": "Mass. Ordinance Bn"
+  },
+  {
+    "id": "vershon__r_mass_field_hosp_ww_i_ph",
+    "name": "R. Vershon",
+    "branchLabel": "Mass. Field Hospital",
+    "era": "World War I",
+    "lat": 42.1893972222222,
+    "lng": -72.6289583333333,
+    "flags": [],
+    "photo": "photos/vershon__r_mass_field_hosp_ww_i_ph.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "unknown_vet",
+    "name": "Unknown Vet",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.188225,
+    "lng": -72.6278611111111,
+    "flags": [],
+    "photo": "photos/unknown_vet.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "retake",
+    "name": "Unknown Veteran",
+    "branch": "Unknown",
+    "branchLabel": "Unknown Branch",
+    "era": "Unknown Era",
+    "lat": 42.188575,
+    "lng": -72.6288611111111,
+    "story": "This headstone requires a retake photograph for identification. The location has been preserved. Identity and service details to be confirmed.",
+    "color": "#3a3a3a",
+    "icon": "?",
+    "photo": "photos/retake.jpg"
+  },
+  {
+    "id": "unknown2",
+    "name": "Unknown Veteran",
+    "branch": "Unknown",
+    "branchLabel": "Unknown Branch",
+    "era": "Unknown Era",
+    "lat": 42.1890138888889,
+    "lng": -72.6287166666667,
+    "story": "This veteran's identity is currently unknown. The headstone has been photographed and geolocated to preserve its place in history. Research is ongoing \u2014 if you recognize this stone, please contact us.",
+    "color": "#3a3a3a",
+    "icon": "?",
+    "photo": "photos/unknown2.jpg"
+  },
+  {
+    "id": "veteran__unknown1",
+    "name": "Unknown Veteran",
+    "branch": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1880722222222,
+    "lng": -72.6293861111111,
+    "photo": "photos/veteran__unknown1.jpg",
+    "story": "Identity unknown. Veteran photographed at Calvary Cemetery, Holyoke, MA."
+  },
+  {
+    "id": "veteran__unknown2__inf",
+    "name": "Veteran",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1880333333333,
+    "lng": -72.6294944444444,
+    "flags": [],
+    "photo": "photos/veteran__unknown2__inf.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "vogt__c_army_ww_ii",
+    "name": "C. Vogt",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1885694,
+    "lng": -72.6284167,
+    "flags": [],
+    "photo": "photos/vogt__c_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "vogt",
+    "name": "W. Vogt",
+    "branch": "Army Air Forces",
+    "branchLabel": "AAF \u00b7 WWII",
+    "era": "World War II",
+    "lat": 42.18772777777777,
+    "lng": -72.62720555555555,
+    "story": "W. Vogt served in the Army Air Forces during World War II. Further details about his service are being researched.",
+    "color": "#3a7a2a",
+    "icon": "\u2708",
+    "photo": "photos/vogt.jpg"
+  },
+  {
+    "id": "vogt__w_aaf_ww_ii",
+    "name": "W. Vogt",
+    "branchLabel": "USAAF",
+    "era": "World War II",
+    "lat": 42.1877278,
+    "lng": -72.6272056,
+    "flags": [],
+    "photo": "photos/vogt__w_aaf_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "waegelein__g_army_ww_ii",
+    "name": "G. Waegelein",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1877638888889,
+    "lng": -72.627425,
+    "flags": [],
+    "photo": "photos/waegelein__g_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "walker__j_j_army_ww_ii",
+    "name": "J. Walker",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1897305555556,
+    "lng": -72.6291805555555,
+    "flags": [],
+    "photo": "photos/walker__j_j_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "walker__j_navy",
+    "name": "J. Walker",
+    "branchLabel": "Navy",
+    "era": "Unknown Era",
+    "lat": 42.1880388888889,
+    "lng": -72.6277861111111,
+    "flags": [],
+    "photo": "photos/walker__j_navy.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "walsh__t_army_ww_ii",
+    "name": "T. Walsh",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1892888888889,
+    "lng": -72.6294111111111,
+    "flags": [],
+    "photo": "photos/walsh__t_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "ward__p_army_ww_i",
+    "name": "P. Ward",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1876361111111,
+    "lng": -72.6288388888889,
+    "flags": [],
+    "photo": "photos/ward__p_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "welch__f_navy_ww_i",
+    "name": "F. Welch",
+    "branchLabel": "Navy",
+    "era": "World War I",
+    "lat": 42.1869277777778,
+    "lng": -72.6277694444444,
+    "flags": [],
+    "photo": "photos/welch__f_navy_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "weslowski__j_army_vietnam",
+    "name": "J. Weslowski",
+    "branchLabel": "Army",
+    "era": "Vietnam",
+    "lat": 42.1869555555556,
+    "lng": -72.6283194444444,
+    "flags": [],
+    "photo": "photos/weslowski__j_army_vietnam.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "whalen__j_army_ww_i",
+    "name": "J. Whalen",
+    "branchLabel": "Army",
+    "era": "World War I",
+    "lat": 42.1871027777778,
+    "lng": -72.6282666666667,
+    "flags": [],
+    "photo": "photos/whalen__j_army_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "white__w_mass_aero_sq_ww",
+    "name": "W White",
+    "branch": "Mass. Aero Squadron",
+    "branchLabel": "Squadron",
+    "era": "World War I",
+    "lat": 42.188569,
+    "lng": -72.629714,
+    "story": "W White served in the Mass. Aero Squadron during World War I. Further details about their service are being researched. If you have information about this veteran, please contact us.",
+    "color": "#5a3a8b",
+    "icon": "\u2708",
+    "photo": "photos/white__w_mass_aero_sq_ww.jpg"
+  },
+  {
+    "id": "white__w_mass_aero_sq_ww_i",
+    "name": "W. White",
+    "branchLabel": "Mass. Aero Squadron",
+    "era": "World War I",
+    "lat": 42.1885694444444,
+    "lng": -72.6297138888889,
+    "flags": [],
+    "photo": "photos/white__w_mass_aero_sq_ww_i.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "williamson__f_army_korea",
+    "name": "F. Williamson",
+    "branchLabel": "Army",
+    "era": "Korean War",
+    "lat": 42.1892,
+    "lng": -72.6298056,
+    "flags": [],
+    "photo": "photos/williamson__f_army_korea.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "wotton__f_army_ww_ii",
+    "name": "F. Wotton",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1887277777778,
+    "lng": -72.6283555555556,
+    "flags": [],
+    "photo": "photos/wotton__f_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "wynn__w_mass_",
+    "name": "W. Wynn",
+    "branchLabel": "Unknown",
+    "era": "Unknown Era",
+    "lat": 42.1880277777778,
+    "lng": -72.6284472222222,
+    "flags": [],
+    "photo": "photos/wynn__w_mass_.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "zebrowski__f_army_ww_ii",
+    "name": "F. Zebrowski",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1870389,
+    "lng": -72.6278,
+    "flags": [],
+    "photo": "photos/zebrowski__f_army_ww_ii.jpg",
+    "source": "session7"
+  },
+  {
+    "id": "zebrowski__g_army_ww_ii",
+    "name": "G. Zebrowski",
+    "branchLabel": "Army",
+    "era": "World War II",
+    "lat": 42.1870472222222,
+    "lng": -72.6277694444444,
+    "flags": [],
+    "photo": "photos/zebrowski__g_army_ww_ii.jpg",
+    "source": "session7"
+  }
+];
+
+const ERA_COLORS = {
+  'Civil War Era':'#8B4513',
+  'Spanish-American War':'#CD853F',
+  'World War I':'#4682B4',
+  'World War II':'#2E8B57',
+  'Korean War':'#9370DB',
+  'Vietnam':'#DC143C',
+  'Unknown Era':'#666',
+};
+const ERA_ORDER = ['Civil War Era','Spanish-American War','World War I','World War II','Korean War','Vietnam','Unknown Era'];
+
+function normEra(raw) {
+  if (!raw) return 'Unknown Era';
+  const s = raw.trim();
+  if (s.includes('Civil')) return 'Civil War Era';
+  if (s.includes('Spanish')) return 'Spanish-American War';
+  if (s.includes('Vietnam')) return 'Vietnam';
+  if (s.includes('World War II')) return 'World War II';
+  if (s.includes('World War I')) return 'World War I';
+  if (s.includes('Korean')) return 'Korean War';
+  if (s.includes('Early') || s.includes('Pre-')) return 'World War I';
+  return 'Unknown Era';
+}
+
+function eraColor(raw) { return ERA_COLORS[normEra(raw)] || '#666'; }
+
+function branchSym(branch) {
+  if (!branch) return '✦';
+  const b = branch.toUpperCase();
+  if (b.includes('NAVY')) return '⚓';
+  if (b.includes('MARINE') || b.includes('USMC')) return '🦅';
+  if (b.includes('AIR') || b.includes('USAF')) return '✈';
+  if (b.includes('COAST')) return '⚑';
+  if (b.includes('ARMY')) return '★';
+  return '✦';
+}
+
+// Map
+const map = L.map('map', {preferCanvas:true, minZoom:15, maxZoom:20})
+  .setView([42.18855,-72.62910], 17);
+
+const satellite = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {attribution:'&copy; Esri', maxNativeZoom:19, maxZoom:20}
+);
+const street = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {attribution:'&copy; CARTO', subdomains:'abcd', maxNativeZoom:19, maxZoom:20}
+);
+const terrain = L.tileLayer(
+  'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  {attribution:'&copy; OpenTopoMap', subdomains:'abc', maxNativeZoom:17, maxZoom:20}
+);
+
+satellite.addTo(map);
+L.control.layers({'Satellite':satellite,'Street':street,'Terrain':terrain},{},{position:'topleft'}).addTo(map);
+
+// State
+let activeEras = new Set(ERA_ORDER);
+let markerMap = {};
+let activeIdx = null;
+let searchTerm = '';
+
+// Markers
+function buildMarkers() {
+  Object.values(markerMap).forEach(m => map.removeLayer(m));
+  markerMap = {};
+  veterans.forEach((v, idx) => {
+    if (!activeEras.has(normEra(v.era))) return;
+    const color = eraColor(v.era);
+    const sym = branchSym(v.branch);
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="width:26px;height:26px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.65);display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 1px 5px rgba(0,0,0,0.8);cursor:pointer;">${sym}</div>`,
+      iconSize:[26,26], iconAnchor:[13,13]
+    });
+    const m = L.marker([v.lat, v.lng], {icon});
+    m.on('click', () => {
+      // Show coordinate tooltip briefly on the marker
+      openPopup(v, idx);
+    });
+    m.addTo(map);
+    markerMap[idx] = m;
+  });
+}
+
+// Popup
+let activeMarker = null;
+let activeLabel = null;
+
+function openPopup(v, idx) {
+  // Remove pulse from previous marker
+  if (activeMarker) {
+    activeMarker.getElement()?.classList.remove('marker-pulse');
+  }
+  document.getElementById('pname').textContent = v.name;
+  document.getElementById('pservice').textContent = [v.branch, v.era].filter(Boolean).join(' • ');
+  document.getElementById('pstory').textContent = v.story || 'Service details being researched.';
+  const photo = document.getElementById('pphoto');
+  if (v.photo) {
+    photo.src = v.photo;
+    photo.style.display = 'block';
+  } else {
+    photo.style.display = 'none';
+  }
+  const flagsEl = document.getElementById('pflags');
+  flagsEl.innerHTML = '';
+  const fs = {'KIA':['#8B0000','#fff'],'Purple Heart':['#7B2D8B','#fff'],'Bronze Star':['#B8860B','#fff'],'Air Medal':['#1a6abf','#fff'],'Female Veteran':['#C71585','#fff']};
+  (v.flags||[]).forEach(f => {
+    const [bg,fg] = fs[f]||['#444','#fff'];
+    const b = document.createElement('span');
+    b.className='fbadge'; b.style.background=bg; b.style.color=fg; b.textContent=f;
+    flagsEl.appendChild(b);
+  });
+  // Remove old label
+  if (activeLabel) { map.removeLayer(activeLabel); activeLabel = null; }
+
+  // Pulse the clicked marker
+  const clickedMarker = markerMap[idx];
+  if (clickedMarker) {
+    clickedMarker.getElement()?.classList.add('marker-pulse');
+    activeMarker = clickedMarker;
+  }
+
+  // Permanent coordinate + name label on the map
+  activeLabel = L.popup({
+    closeButton: false,
+    autoPan: false,
+    className: 'coord-label',
+    offset: [15, 0]
+  })
+  .setLatLng([v.lat, v.lng])
+  .setContent(`<div style="font-family:monospace;font-size:0.7rem;color:#f0e8d8;background:rgba(10,10,10,0.88);padding:5px 9px;border-radius:3px;border:1px solid #555;white-space:nowrap;"><strong style="font-family:Georgia,serif;font-size:0.75rem;">${v.name}</strong><br>${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}</div>`)
+  .openOn(map);
+
+  // Pan so grave appears in left half of screen, popup shows on right
+  // Popup card is 310px wide, sitting at right:275px from edge
+  // Grave should appear at roughly 30% from left edge
+  const mapW = map.getContainer().offsetWidth;
+  const popupLeft = mapW - 275 - 310; // left edge of popup card
+  const graveTargetX = popupLeft * 0.45; // where we want the grave on screen
+  const currentCenter = map.project(map.getCenter(), map.getZoom());
+  const gravePoint = map.project([v.lat, v.lng], map.getZoom());
+  const currentGraveX = gravePoint.x - currentCenter.x + mapW / 2;
+  const shiftX = currentGraveX - graveTargetX;
+  const newCenter = map.unproject([currentCenter.x + shiftX, currentCenter.y], map.getZoom());
+  map.panTo(newCenter, {animate:true, duration:0.7});
+
+  // Highlight sidebar
+  document.querySelectorAll('.vet-item').forEach(el => el.classList.remove('active'));
+  const si = document.querySelector(`.vet-item[data-i="${idx}"]`);
+  if (si) { si.classList.add('active'); si.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+  activeIdx = idx;
+  document.getElementById('popup').classList.add('show');
+}
+
+function closePopup() {
+  document.getElementById('popup').classList.remove('show');
+  if (activeMarker) {
+    activeMarker.getElement()?.classList.remove('marker-pulse');
+    activeMarker = null;
+  }
+  if (activeLabel) { map.removeLayer(activeLabel); activeLabel = null; }
+}
+document.getElementById('popup').addEventListener('click', e => {
+  if (e.target === document.getElementById('popup')) closePopup();
+});
+// Also close on map click when popup is open
+map.on('click', () => {
+  if (document.getElementById('popup').classList.contains('show')) closePopup();
+});
+
+// Sidebar
+function buildSidebar() {
+  const list = document.getElementById('vet-list');
+  const none = document.getElementById('no-results');
+  list.innerHTML = '';
+  const term = searchTerm.toLowerCase();
+  let shown = 0;
+  veterans.forEach((v, idx) => {
+    if (!activeEras.has(normEra(v.era))) return;
+    if (term && !v.name.toLowerCase().includes(term) && !(v.branch||'').toLowerCase().includes(term)) return;
+    shown++;
+    const el = document.createElement('div');
+    el.className = 'vet-item' + (idx===activeIdx?' active':'');
+    el.dataset.i = idx;
+    el.innerHTML = `<div class="v-sym" style="color:${eraColor(v.era)}">${branchSym(v.branch)}</div><div style="flex:1;min-width:0"><div class="v-name">${v.name}</div><div class="v-era">${normEra(v.era)}</div></div>`;
+    el.addEventListener('click', () => {
+      map.flyTo([v.lat, v.lng], 19, {duration:1.0});
+      setTimeout(() => openPopup(v, idx), 350);
+    });
+    list.appendChild(el);
+  });
+  none.style.display = shown===0 ? 'block' : 'none';
+  document.getElementById('vet-count').textContent = `${veterans.length} Documented Veterans`;
+}
+
+// Era counts
+const eraCounts = {};
+veterans.forEach(v => {
+  const e = normEra(v.era);
+  eraCounts[e] = (eraCounts[e]||0)+1;
+});
+
+// Filter buttons
+const filterDiv = document.getElementById('era-filters');
+ERA_ORDER.forEach(era => {
+  if (!eraCounts[era]) return;
+  const color = ERA_COLORS[era  
+];
+  const short = era.replace(' Era','').replace('World War ','WW').replace('Korean War','Korea').replace('Spanish-American War','Span-Am');
+  const btn = document.createElement('button');
+  btn.className='era-btn on'; btn.style.background=color;
+  btn.dataset.era=era; btn.textContent=short;
+  btn.addEventListener('click', () => {
+    if (activeEras.has(era)) {
+      activeEras.delete(era);
+      btn.classList.replace('on','off');
+      document.querySelector(`.leg-row[data-era="${era}"]`)?.classList.add('dimmed');
+    } else {
+      activeEras.add(era);
+      btn.classList.replace('off','on');
+      document.querySelector(`.leg-row[data-era="${era}"]`)?.classList.remove('dimmed');
+    }
+    if (activeEras.size===0) {
+      // Re-enable all instead of getting stuck
+      ERA_ORDER.forEach(e => {
+        activeEras.add(e);
+        const b = document.querySelector(`.era-btn[data-era="${e}"]`);
+        if (b) { b.classList.replace('off','on'); }
+        document.querySelector(`.leg-row[data-era="${e}"]`)?.classList.remove('dimmed');
+      });
+    }
+    buildMarkers(); buildSidebar();
+  });
+  filterDiv.appendChild(btn);
+});
+
+// Legend
+const legRows = document.getElementById('leg-rows');
+ERA_ORDER.forEach(era => {
+  if (!eraCounts[era]) return;
+  const row = document.createElement('div');
+  row.className='leg-row'; row.dataset.era=era;
+  row.innerHTML=`<div class="leg-sym" style="color:${ERA_COLORS[era]}">●</div><div class="leg-label">${era.replace(' Era','')}</div><div class="leg-count">${eraCounts[era]}</div>`;
+  row.addEventListener('click', () => {
+    document.querySelector(`.era-btn[data-era="${era}"]`)?.click();
+  });
+  legRows.appendChild(row);
+});
+
+// Search
+document.getElementById('search').addEventListener('keydown', e => {
+  if (e.key==='Enter') {
+    const term = e.target.value.toLowerCase();
+    const match = veterans.find(v => v.name.toLowerCase().includes(term));
+    if (match) {
+      const idx = veterans.indexOf(match);
+      map.flyTo([match.lat, match.lng], 19, {duration:1.0});
+      setTimeout(() => openPopup(match, idx), 350);
+    }
+  }
+});
+document.getElementById('search').addEventListener('input', e => {
+  searchTerm = e.target.value;
+  buildSidebar();
+});
+
+buildMarkers();
+buildSidebar();
+</script>
+</body>
+</html>
