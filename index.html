@@ -5283,6 +5283,10 @@ function openPopup(v, idx) {
   const si = document.querySelector(`.vet-item[data-i="${idx}"]`);
   if (si) { si.classList.add('active'); si.scrollIntoView({block:'nearest',behavior:'smooth'}); }
   activeIdx = idx;
+  // Update sidebar highlight
+  document.querySelectorAll('.vet-item').forEach(el => el.classList.remove('active'));
+  const si = document.querySelector(`.vet-item[data-i="${idx}"]`);
+  if (si) { si.classList.add('active'); si.scrollIntoView({block:'nearest', behavior:'smooth'}); }
   document.getElementById('popup').classList.add('show');
 }
 
