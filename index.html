@@ -5393,8 +5393,7 @@ veterans.forEach(v => {
 const filterDiv = document.getElementById('era-filters');
 ERA_ORDER.forEach(era => {
   if (!eraCounts[era]) return;
-  const color = ERA_COLORS[era  
-];
+  const color = ERA_COLORS[era];
   const short = era.replace(' Era','').replace('World War ','WW').replace('Korean War','Korea').replace('Spanish-American War','Span-Am');
   const btn = document.createElement('button');
   btn.className='era-btn on'; btn.style.background=color;
