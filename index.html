@@ -5372,7 +5372,7 @@ function buildSidebar() {
     const el = document.createElement('div');
     el.className = 'vet-item' + (idx===activeIdx?' active':'');
     el.dataset.i = idx;
-    el.innerHTML = `<div class="v-sym" style="color:${eraColor(v.era)}">${branchSym(v.branch)}</div><div style="flex:1;min-width:0"><div class="v-name">${v.name}</div><div class="v-era">${normEra(v.era)}</div></div>`;
+    el.innerHTML = `<div class="v-sym" style="color:${eraColor(v.era)}">${branchSym(v.branch)}</div><div style="flex:1;min-width:0"><div class="v-name">${(()=>{const p=v.name.trim().split(/\s+/);return p.length>1?p[p.length-1]+', '+p.slice(0,-1).join(' '):v.name;})()}</div><div class="v-era">${normEra(v.era)}</div></div>`;
     el.addEventListener('click', () => {
       map.flyTo([v.lat, v.lng], 19, {duration:1.0});
       setTimeout(() => openPopup(v, idx), 350);
