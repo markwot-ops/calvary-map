@@ -5364,7 +5364,7 @@ function buildSidebar() {
   list.innerHTML = '';
   const term = searchTerm.toLowerCase();
   let shown = 0;
-  const sorted = [...veterans].map((v,i)=>({...v,_i:i})).sort((a,b)=>a.name.localeCompare(b.name));
+  const sorted = [...veterans].map((v,i)=>({...v,_i:i})).sort((a,b)=>{ const la=a.name.split(' ').pop(), lb=b.name.split(' ').pop(); return la.localeCompare(lb)||a.name.localeCompare(b.name); });
   sorted.forEach((v) => { const idx = v._i;
     if (!activeEras.has(normEra(v.era))) return;
     if (term && !v.name.toLowerCase().includes(term) && !(v.branch||'').toLowerCase().includes(term)) return;
