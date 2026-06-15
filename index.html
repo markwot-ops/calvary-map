@@ -5242,6 +5242,7 @@ function buildMarkers() {
   markerMap = {};
   veterans.forEach((v, idx) => {
     if (!activeEras.has(normEra(v.era))) return;
+    if (!v.lat || !v.lng) return;
     const color = eraColor(v.era);
     const sym = branchSym(v.branch);
     const icon = L.divIcon({
