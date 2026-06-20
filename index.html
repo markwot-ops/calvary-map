@@ -5473,17 +5473,6 @@ function openPopup(v, idx) {
     activeMarker = clickedMarker;
   }
 
-  // Permanent coordinate + name label on the map
-  activeLabel = L.popup({
-    closeButton: false,
-    autoPan: false,
-    className: 'coord-label',
-    offset: [15, 0]
-  })
-  .setLatLng([v.lat, v.lng])
-  .setContent(`<div style="font-family:monospace;font-size:0.7rem;color:#f0e8d8;background:rgba(10,10,10,0.88);padding:5px 9px;border-radius:3px;border:1px solid #555;white-space:nowrap;"><strong style="font-family:Georgia,serif;font-size:0.75rem;">${v.name}</strong><br>${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}</div>`)
-  .openOn(map);
-
   // Pan so grave appears in left half of screen, popup shows on right
   // Popup card is 310px wide, sitting at right:275px from edge
   // Grave should appear at roughly 30% from left edge
