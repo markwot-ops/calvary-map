@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sidebar highlight preview v3</title>
+<style>
+  body { margin:0; padding:40px; background:#0a0a0a; font-family:Arial,sans-serif; display:flex; gap:50px; flex-wrap:wrap; }
+  .col { width:265px; }
+  .label { color:#888; font-size:13px; margin-bottom:10px; letter-spacing:0.03em; }
+  .sidebar { background:rgba(10,10,10,0.93); border:1px solid #2a2a2a; border-radius:4px; padding:3px 0; }
+
+  .vet-item { padding:8px 11px; cursor:pointer; border-bottom:1px solid #181818; display:flex; align-items:center; gap:7px; font-family:Georgia,serif; }
+  .v-sym { font-size:0.85rem; width:15px; text-align:center; flex-shrink:0; }
+  .v-name { font-size:0.82rem; color:#d4c9b8; flex:1; }
+  .v-era { font-size:0.66rem; color:#777; }
+
+  .demo-old .vet-item.active { background:#1e120a; border-left:3px solid #CD853F; padding-left:8px; }
+
+  .demo-tried .vet-item.active { background:#1e120a; border-left:3px solid #CD853F; padding-left:8px; }
+  .demo-tried .vet-item.active .v-name { color:#f9efd9; text-shadow:0 0 6px rgba(205,133,63,0.68); }
+
+  .demo-bright .vet-item.active {
+    background: linear-gradient(90deg, rgba(205,133,63,0.22), rgba(20,12,7,0.97) 65%);
+    border-left: 4px solid #FFB95C;
+    padding-left: 7px;
+    box-shadow: inset 0 0 24px rgba(205,133,63,0.3), 0 0 18px rgba(205,133,63,0.5);
+  }
+  .demo-bright .vet-item.active .v-name {
+    color:#fffaf0;
+    text-shadow: 0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,191,107,0.9), 0 0 20px rgba(205,133,63,0.7);
+  }
+  .demo-bright .vet-item.active .v-sym {
+    text-shadow: 0 0 4px rgba(255,255,255,0.8), 0 0 10px rgba(255,191,107,0.8);
+  }
+</style>
+</head>
+<body>
+
+<div class="col">
+  <div class="label">NOW — no glow</div>
+  <div class="sidebar demo-old">
+    <div class="vet-item"><span class="v-sym">⚓</span><span class="v-name">J. Losty</span><span class="v-era">WWII</span></div>
+    <div class="vet-item active"><span class="v-sym">✈</span><span class="v-name">L. Concannon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">★</span><span class="v-name">Mary Gordon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">✚</span><span class="v-name">Rev. W. Davitt</span><span class="v-era">WWI</span></div>
+  </div>
+</div>
+
+<div class="col">
+  <div class="label">LAST TRY — too subtle</div>
+  <div class="sidebar demo-tried">
+    <div class="vet-item"><span class="v-sym">⚓</span><span class="v-name">J. Losty</span><span class="v-era">WWII</span></div>
+    <div class="vet-item active"><span class="v-sym">✈</span><span class="v-name">L. Concannon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">★</span><span class="v-name">Mary Gordon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">✚</span><span class="v-name">Rev. W. Davitt</span><span class="v-era">WWI</span></div>
+  </div>
+</div>
+
+<div class="col">
+  <div class="label">MUCH BRIGHTER — try this</div>
+  <div class="sidebar demo-bright">
+    <div class="vet-item"><span class="v-sym">⚓</span><span class="v-name">J. Losty</span><span class="v-era">WWII</span></div>
+    <div class="vet-item active"><span class="v-sym">✈</span><span class="v-name">L. Concannon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">★</span><span class="v-name">Mary Gordon</span><span class="v-era">WWII</span></div>
+    <div class="vet-item"><span class="v-sym">✚</span><span class="v-name">Rev. W. Davitt</span><span class="v-era">WWI</span></div>
+  </div>
+</div>
+
+</body>
+</html>
