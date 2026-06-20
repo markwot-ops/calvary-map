@@ -69,7 +69,10 @@ body { font-family:Georgia,serif; background:#1a1a1a; color:#f0e8d8; height:100v
   display:flex; align-items:center; gap:7px; transition:background 0.1s;
 }
 .vet-item:hover { background:#1c1c1c; }
-.vet-item.active { background:#1e120a; border-left:3px solid #CD853F; padding-left:8px; }
+.vet-item.active { background:#000000; border-left:3px solid #CD853F; padding-left:8px; }
+.vet-item.active .v-name { color:#ffffff; text-shadow:0 0 4px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.5); }
+.vet-item.active .v-era { color:#ffffff; text-shadow:0 0 4px rgba(255,255,255,0.8), 0 0 8px rgba(255,255,255,0.4); }
+.vet-item.active .v-sym { text-shadow:0 0 4px rgba(255,255,255,0.7); }
 .v-sym { font-size:0.8rem; width:15px; text-align:center; flex-shrink:0; }
 .v-name { font-size:0.78rem; color:#d4c9b8; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .v-era { font-size:0.63rem; color:#777; }
