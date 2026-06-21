@@ -3230,7 +3230,7 @@ const veterans = [
   },
   {
     "id": "horrigan_a_j_md_pioneer_",
-    "name": "A.J. Horrigan, MD",
+    "name": "A.J. Horrigan MD",
     "branch": "Medical Corps / Pioneer Radiologist",
     "branchLabel": "Radiologist",
     "era": "Pre-WWI / Early 20th Century",
@@ -5299,7 +5299,7 @@ function buildSidebar() {
   list.innerHTML = '';
   const term = searchTerm.toLowerCase();
   let shown = 0;
-  const sorted = [...veterans].map((v,i)=>({...v,_i:i})).sort((a,b)=>{ const suf=/^(Sr|Jr|II|III|IV)\.?$/i; const wa=a.name.split(' '), wb=b.name.split(' '); const la=suf.test(wa[wa.length-1])?wa[wa.length-2]||wa[0]:wa[wa.length-1]; const lb=suf.test(wb[wb.length-1])?wb[wb.length-2]||wb[0]:wb[wb.length-1]; return la.localeCompare(lb)||a.name.localeCompare(b.name); });
+  const sorted = [...veterans].map((v,i)=>({...v,_i:i})).sort((a,b)=>{ const suf=/^(Sr|Jr|II|III|IV|MD)\.?$/i; const wa=a.name.split(' '), wb=b.name.split(' '); const la=suf.test(wa[wa.length-1])?wa[wa.length-2]||wa[0]:wa[wa.length-1]; const lb=suf.test(wb[wb.length-1])?wb[wb.length-2]||wb[0]:wb[wb.length-1]; return la.localeCompare(lb)||a.name.localeCompare(b.name); });
   sorted.forEach((v) => { const idx = v._i;
     if (!activeEras.has(normEra(v.era))) return;
     if (term && !v.name.toLowerCase().includes(term) && !(v.branch||'').toLowerCase().includes(term)) return;
@@ -5307,7 +5307,7 @@ function buildSidebar() {
     const el = document.createElement('div');
     el.className = 'vet-item' + (idx===activeIdx?' active':'');
     el.dataset.i = idx;
-    el.innerHTML = `<div class="v-sym" style="color:${eraColor(v.era)}">${branchSym(v.branch)}</div><div style="flex:1;min-width:0"><div class="v-name">${(()=>{const p=v.name.trim().split(/\s+/);const suf=/^(Sr|Jr|II|III|IV)\.?$/i;if(p.length>2&&suf.test(p[p.length-1])){return p[p.length-2]+', '+p.slice(0,-2).join(' ')+' '+p[p.length-1];}return p.length>1?p[p.length-1]+', '+p.slice(0,-1).join(' '):v.name;})()}</div><div class="v-era">${normEra(v.era)}</div></div>`;
+    el.innerHTML = `<div class="v-sym" style="color:${eraColor(v.era)}">${branchSym(v.branch)}</div><div style="flex:1;min-width:0"><div class="v-name">${(()=>{const p=v.name.trim().split(/\s+/);const suf=/^(Sr|Jr|II|III|IV|MD)\.?$/i;if(p.length>2&&suf.test(p[p.length-1])){return p[p.length-2]+', '+p.slice(0,-2).join(' ')+' '+p[p.length-1];}return p.length>1?p[p.length-1]+', '+p.slice(0,-1).join(' '):v.name;})()}</div><div class="v-era">${normEra(v.era)}</div></div>`;
     el.addEventListener('click', () => {
       map.flyTo([v.lat, v.lng], 19, {duration:1.0});
       setTimeout(() => openPopup(v, idx), 350);
