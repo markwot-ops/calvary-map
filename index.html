@@ -5327,6 +5327,8 @@ function buildSidebar() {
     list.appendChild(el);
   });
   none.style.display = shown===0 ? 'block' : 'none';
+}
+
 function updateCount() {
   const showing = veterans.filter(v => activeEras.has(normEra(v.era))).length;
   const total = veterans.length;
