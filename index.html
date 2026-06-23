@@ -5327,8 +5327,6 @@ function buildSidebar() {
     list.appendChild(el);
   });
   none.style.display = shown===0 ? 'block' : 'none';
-}
-
 function updateCount() {
   const showing = veterans.filter(v => activeEras.has(normEra(v.era))).length;
   const total = veterans.length;
@@ -5357,16 +5355,24 @@ ERA_ORDER.forEach(era => {
   btn.className='era-btn on'; btn.style.background=color;
   btn.dataset.era=era; btn.textContent=short;
   btn.addEventListener('click', () => {
+    // Toggle this era on/off independently
     if (btn.classList.contains('selected')) {
-      // Deselect — return all to normal
       btn.classList.remove('selected');
-      activeEras = new Set(ERA_ORDER);
-      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
+      activeEras.delete(era);
+      // If none left, reset all on
+      if (activeEras.size === 0) {
+        ERA_ORDER.forEach(e => activeEras.add(e));
+        document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
+      }
     } else {
-      // Select this era — highlight it, dim others
-      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
+      // First click when nothing selected — start fresh with just this one
+      const anySelected = document.querySelector('.era-btn.selected');
+      if (!anySelected) {
+        activeEras = new Set([era]);
+      } else {
+        activeEras.add(era);
+      }
       btn.classList.add('selected');
-      activeEras = new Set([era]);
     }
     // Sync legend
     ERA_ORDER.forEach(e => {
