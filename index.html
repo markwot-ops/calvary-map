@@ -56,10 +56,11 @@ body { font-family:Georgia,serif; background:#1a1a1a; color:#f0e8d8; height:100v
   font-size:0.5rem; cursor:pointer; font-family:Georgia,serif;
   color:white; text-shadow:0 1px 2px rgba(0,0,0,0.6);
   transition:opacity 0.2s, border-color 0.15s;
-  opacity:1;
+  opacity:0.6;
 }
-.era-btn.off { opacity:0.28; border-color:transparent; }
-.era-btn.on { border-color:rgba(255,255,255,0.6); opacity:1; }
+.era-btn.off { opacity:0.6; border-color:transparent; }
+.era-btn.on { border-color:rgba(255,255,255,0.6); opacity:0.6; }
+.era-btn.selected { opacity:1; border-color:rgba(255,255,255,0.9); filter:brightness(1.3); }
 
 #vet-list { overflow-y:auto; flex:1; padding:3px 0; }
 #vet-list::-webkit-scrollbar { width:4px; }
@@ -5323,7 +5324,16 @@ function buildSidebar() {
     list.appendChild(el);
   });
   none.style.display = shown===0 ? 'block' : 'none';
-  document.getElementById('vet-count').textContent = `${veterans.length} Documented Veterans`;
+  function updateCount() {
+  const showing = veterans.filter(v => activeEras.has(normEra(v.era))).length;
+  const total = veterans.length;
+  if (showing === total) {
+    document.getElementById('vet-count').textContent = `${total} Documented Veterans`;
+  } else {
+    document.getElementById('vet-count').textContent = `${showing} of ${total} Veterans`;
+  }
+}
+document.getElementById('vet-count').textContent = `${veterans.length} Documented Veterans`;
 }
 
 // Era counts
@@ -5343,25 +5353,29 @@ ERA_ORDER.forEach(era => {
   btn.className='era-btn on'; btn.style.background=color;
   btn.dataset.era=era; btn.textContent=short;
   btn.addEventListener('click', () => {
-    if (activeEras.has(era)) {
-      activeEras.delete(era);
-      btn.classList.replace('on','off');
-      document.querySelector(`.leg-row[data-era="${era}"]`)?.classList.add('dimmed');
+    if (btn.classList.contains('selected')) {
+      // Deselect — return all to normal
+      btn.classList.remove('selected');
+      activeEras = new Set(ERA_ORDER);
+      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
     } else {
-      activeEras.add(era);
-      btn.classList.replace('off','on');
-      document.querySelector(`.leg-row[data-era="${era}"]`)?.classList.remove('dimmed');
+      // Select this era — highlight it, dim others
+      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      activeEras = new Set([era]);
     }
-    if (activeEras.size===0) {
-      // Re-enable all instead of getting stuck
-      ERA_ORDER.forEach(e => {
-        activeEras.add(e);
-        const b = document.querySelector(`.era-btn[data-era="${e}"]`);
-        if (b) { b.classList.replace('off','on'); }
-        document.querySelector(`.leg-row[data-era="${e}"]`)?.classList.remove('dimmed');
-      });
-    }
-    buildMarkers(); buildSidebar();
+    // Sync legend
+    ERA_ORDER.forEach(e => {
+      const row = document.querySelector(`.leg-row[data-era="${e}"]`);
+      if (row) {
+        if (activeEras.size < ERA_ORDER.length && !activeEras.has(e)) {
+          row.classList.add('dimmed');
+        } else {
+          row.classList.remove('dimmed');
+        }
+      }
+    });
+    buildMarkers(); buildSidebar(); updateCount();
   });
   filterDiv.appendChild(btn);
 });
