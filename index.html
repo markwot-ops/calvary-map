@@ -5292,7 +5292,7 @@ function closePopup() {
     activeMarker = null;
   }
   if (activeLabel) { map.removeLayer(activeLabel); activeLabel = null; }
-  // Clear sidebar active state — return name/symbol to default luminance
+  // Clear sidebar active state so pulse and glow stop
   document.querySelectorAll('.vet-item').forEach(el => el.classList.remove('active'));
   activeIdx = null;
 }
@@ -5327,7 +5327,7 @@ function buildSidebar() {
     list.appendChild(el);
   });
   none.style.display = shown===0 ? 'block' : 'none';
-  function updateCount() {
+function updateCount() {
   const showing = veterans.filter(v => activeEras.has(normEra(v.era))).length;
   const total = veterans.length;
   if (showing === total) {
@@ -5337,7 +5337,6 @@ function buildSidebar() {
   }
 }
 document.getElementById('vet-count').textContent = `${veterans.length} Documented Veterans`;
-}
 
 // Era counts
 const eraCounts = {};
@@ -5356,35 +5355,22 @@ ERA_ORDER.forEach(era => {
   btn.className='era-btn on'; btn.style.background=color;
   btn.dataset.era=era; btn.textContent=short;
   btn.addEventListener('click', () => {
-    // Toggle this era on/off independently
     if (btn.classList.contains('selected')) {
+      // Deselect — return all to normal
       btn.classList.remove('selected');
-      activeEras.delete(era);
-      // If none selected, turn all back on
-      if (activeEras.size === 0) {
-        ERA_ORDER.forEach(e => activeEras.add(e));
-        document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
-      }
+      activeEras = new Set(ERA_ORDER);
+      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
     } else {
-      // If all are currently on (no selections), start fresh with just this one
-      const anySelected = document.querySelector('.era-btn.selected');
-      if (!anySelected) {
-        activeEras = new Set([era]);
-        ERA_ORDER.forEach(e => {
-          const b = document.querySelector(`.era-btn[data-era="${e}"]`);
-          if (b) b.classList.remove('selected');
-        });
-      } else {
-        activeEras.add(era);
-      }
+      // Select this era — highlight it, dim others
+      document.querySelectorAll('.era-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
+      activeEras = new Set([era]);
     }
-    // Sync legend dimming
+    // Sync legend
     ERA_ORDER.forEach(e => {
       const row = document.querySelector(`.leg-row[data-era="${e}"]`);
       if (row) {
-        const anySelected = document.querySelector('.era-btn.selected');
-        if (anySelected && !activeEras.has(e)) {
+        if (activeEras.size < ERA_ORDER.length && !activeEras.has(e)) {
           row.classList.add('dimmed');
         } else {
           row.classList.remove('dimmed');
