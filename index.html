@@ -4940,13 +4940,13 @@ const veterans = [
     "lng": -72.6292038,
     "branch": "Navy",
     "branchLabel": "Navy · Great White Fleet",
-    "era": "Spanish-American War",
-    "photo": "",
+    "era": "Peacetime Navy (1899–1916)",
+    "photo": "https://raw.githubusercontent.com/markwot-ops/calvary-map/photo-fix/altenkirch_a_navy_great_white_fleet.jpg",
     "story": "Alfred Altenkirch served as a Fireman First Class in the United States Navy, assigned to the USS Vermont — flagship unit of President Theodore Roosevelt's Great White Fleet. In December 1907, the Vermont departed Hampton Roads as part of the most ambitious naval demonstration in American history: 16 battleships sailing around the globe as a show of American power. On April 9, 1908, while the Vermont was anchored at Magdalena Bay, Mexico during target practice operations, Altenkirch was found unresponsive in the ship's double bottom compartment — dead at 23 from asphyxia and heart failure, brought on while stoking the boilers in a sealed compartment with no ventilation. His death was reported by Rear Admiral Charles E. Thomas and carried in newspapers across the country. His next of kin was Mrs. Antone Gehlen of Holyoke — his connection to this city and this cemetery. If you have further information about this veteran, please contact the City of Holyoke Veterans Graves Officer at (413) 322-5630 at 310 Appleton Street, 1st Floor, Holyoke, MA 01040.",
     "extraPhotos": [
       {
         "src": "https://raw.githubusercontent.com/markwot-ops/calvary-map/photo-fix/altenkirch_a_navy_great_white_fleet.jpg",
-        "caption": "📷 Portrait of Alfred Altenkirch"
+        "caption": "📷 Portrait of Alfred Altenkirch — gravestone photo pending"
       },
       {
         "src": "https://raw.githubusercontent.com/markwot-ops/calvary-map/photo-fix/altenkirch__a_death_record.jpg",
@@ -5041,15 +5041,17 @@ const ERA_COLORS = {
   'World War II':'#2E8B57',
   'Korean War':'#9370DB',
   'Vietnam':'#DC143C',
+  'Peacetime Navy (1899–1916)':'#2a6496',
   'Unknown Era':'#666',
 };
-const ERA_ORDER = ['Civil War Era','Spanish-American War','World War I','World War II','Korean War','Vietnam','Unknown Era'];
+const ERA_ORDER = ['Civil War Era','Spanish-American War','Peacetime Navy (1899–1916)','World War I','World War II','Korean War','Vietnam','Unknown Era'];
 
 function normEra(raw) {
   if (!raw) return 'Unknown Era';
   const s = raw.trim();
   if (s.includes('Civil')) return 'Civil War Era';
   if (s.includes('Spanish')) return 'Spanish-American War';
+  if (s.includes('Peacetime')) return 'Peacetime Navy (1899–1916)';
   if (s.includes('Vietnam')) return 'Vietnam';
   if (s.includes('World War II')) return 'World War II';
   if (s.includes('World War I')) return 'World War I';
